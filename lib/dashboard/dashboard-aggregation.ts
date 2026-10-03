@@ -20,7 +20,7 @@ export function aggregateDashboard(run: RunInput, experiment: ExperimentInput) {
       activeVirtualUsers: metrics?.activeVirtualUsers ?? 0,
       queueDepth: Math.max(0, queued - allocated),
       requestsPerSecond: metrics?.requestsPerSecond ?? 0,
-      seatsRemaining: metrics?.integrity?.seatsRemaining ?? Math.max(0, 500 - allocated),
+      seatsRemaining: Math.max(0, 500 - allocated),
       suspiciousTraffic: suspiciousTrafficRate,
       throttledRequests: metrics?.abuse.throttled ?? 0,
       blockedRequests: metrics?.abuse.blocked ?? 0,

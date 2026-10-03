@@ -33,7 +33,7 @@ async function ensureSimulationDrop(dropId: string) {
   await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity: 500, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, new: true });
 }
 
-async function cleanupSimulation(dropId: string, users: VirtualUser[], states: Map<number, UserState>) {
+export async function cleanupSimulation(dropId: string, users: VirtualUser[], states: Map<number, UserState>) {
   const environment = getFairDropEnvironment();
   const redis = getRedisClient();
   const queues = await QueueEntry.find({ dropId }).lean();
@@ -73,13 +73,13 @@ async function action(user: VirtualUser, requested: SimulationAction, dropId: st
     if (requested === "DROP_JOIN") {
       const result = await joinDropForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "DROP_JOIN", event: "DUPLICATE_DROP_JOIN", endpoint: "sim:drop", dropId });
-      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, latencyMs: performance.now() - started };
+      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.participant.participantId, latencyMs: performance.now() - started };
     }
     if (requested === "QUEUE_JOIN") {
       const result = await enterQueueForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "QUEUE_JOIN", event: "DUPLICATE_QUEUE_JOIN", endpoint: "sim:queue", dropId });
       states.set(user.index, { ...states.get(user.index), token: issueQueueToken(result.queue, getQueueTokenSecret()) });
-      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, latencyMs: performance.now() - started };
+      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.queue.participantId, queuePosition: result.queue.position, queueSize: result.totalQueued, latencyMs: performance.now() - started };
     }
     if (requested === "QUEUE_STATUS") {
       const result = await getQueueStatusForUser(dropId, user.clerkId);
@@ -92,7 +92,7 @@ async function action(user: VirtualUser, requested: SimulationAction, dropId: st
     }
     if (requested === "ALLOCATION_CLAIM") {
       const result = await claimAllocationForUser(dropId, user.clerkId);
-      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, latencyMs: performance.now() - started };
+      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.allocation.participantId, seatId: result.allocation.seatId, latencyMs: performance.now() - started };
     }
     const token = states.get(user.index)?.token ?? "malformed";
     const verification = verifyQueueTokenDetailed(token, { dropId, participantId: "wrong-participant", queueEntryId: "wrong-entry" }, getQueueTokenSecret());
@@ -106,27 +106,43 @@ async function action(user: VirtualUser, requested: SimulationAction, dropId: st
 }
 
 async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean } }) {
-  const users = new Map<number, VirtualUser>();
-  const states = new Map<number, UserState>();
   try {
     if (run.control.cancelled) {
       await updateSimulationRun(run.simulationRunId, { status: "CANCELLED", completedAt: new Date() });
       return;
     }
-    await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
-    await ensureSimulationDrop(run.dropId);
     await updateSimulationRun(run.simulationRunId, { status: "RUNNING", startedAt: new Date() });
-    const result = await runSimulation(run.simulationRunId, run.dropId, run.config, {
-      executeAction: async (user, requested) => { users.set(user.index, user); return action(user, requested, run.dropId, states); },
-      isCancelled: () => run.control.cancelled,
-      onProgress: async (metrics) => { await updateSimulationRun(run.simulationRunId, { status: run.control.cancelled ? "STOPPING" : "RUNNING", metrics }); },
+    const result = await runFairDropSimulation(run.simulationRunId, run.dropId, run.config, run.control, async (metrics) => {
+      await updateSimulationRun(run.simulationRunId, { status: run.control.cancelled ? "STOPPING" : "RUNNING", metrics });
     });
     await completeSimulationRun(result);
   } catch (error) {
     await updateSimulationRun(run.simulationRunId, { status: "FAILED", completedAt: new Date(), errorSummary: error instanceof Error ? error.message.slice(0, 500) : "Unexpected simulator failure" });
   } finally {
-    await cleanupSimulation(run.dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
     activeRuns.delete(run.simulationRunId);
+  }
+}
+
+/** Awaitable real-engine runner used by both Phase 8 and isolated experiments. */
+export async function runFairDropSimulation(
+  simulationRunId: string,
+  dropId: string,
+  config: SimulationConfig,
+  control: { cancelled: boolean },
+  onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void
+) {
+  const users = new Map<number, VirtualUser>();
+  const states = new Map<number, UserState>();
+  try {
+    await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
+    await ensureSimulationDrop(dropId);
+    return await runSimulation(simulationRunId, dropId, config, {
+      executeAction: async (user, requested) => { users.set(user.index, user); return action(user, requested, dropId, states); },
+      isCancelled: () => control.cancelled,
+      onProgress,
+    });
+  } finally {
+    await cleanupSimulation(dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
   }
 }
 

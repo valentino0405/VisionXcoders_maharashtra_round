@@ -48,8 +48,10 @@ export type SimulationMetrics = {
   responses: { success2xx: number; client4xx: number; throttled429: number; server5xx: number };
   latency: { averageMs: number; p50Ms: number; p95Ms: number; p99Ms: number; maxMs: number; sampleCount: number };
   abuse: { throttled: number; blocked: number; invalidTokenAttempts: number; duplicateAttempts: number; ownershipFailures: number };
-  queue: { successfulJoins: number; duplicateJoins: number; failures: number };
+  queue: { successfulJoins: number; duplicateJoins: number; failures: number; normalizedPositionSum: number; normalizedPositionCount: number; positionBuckets: number[] };
   allocation: { attempts: number; successful: number; rejected: number; duplicates: number };
+  behaviorGroups: Record<string, { users: number; requests: number; queueSuccess: number; allocationSuccess: number }>;
+  integrity: { uniqueSeats: number; duplicateSeatAssignments: number; duplicateParticipantAllocations: number; duplicateQueueEntries: number; overselling: number; seatsRemaining: number };
   errors: { timeouts: number; connection: number; unexpected: number };
 };
 
@@ -73,4 +75,8 @@ export type SimulationActionResult = {
   ownershipFailure?: boolean;
   timeout?: boolean;
   connectionError?: boolean;
+  participantId?: string;
+  seatId?: string;
+  queuePosition?: number;
+  queueSize?: number;
 };

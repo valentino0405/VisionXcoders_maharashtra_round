@@ -77,6 +77,9 @@ export async function runSimulation(
   const deadline = startedMs + configuration.durationSeconds * 1_000;
   const metrics = emptySimulationMetrics(configuration.virtualUsers);
   const latencies: number[] = [];
+  const queuedParticipants = new Set<string>();
+  const allocatedParticipants = new Set<string>();
+  const allocatedSeats = new Set<string>();
   let nextUserIndex = 0;
   let nextRequestAt = startedMs;
   let lastProgressAt = startedMs;
@@ -94,6 +97,9 @@ export async function runSimulation(
       const index = nextUserIndex++;
       if (index >= configuration.virtualUsers) return;
       const user = createVirtualUser(index, simulationRunId, configuration);
+      const group = metrics.behaviorGroups[user.profile] ?? { users: 0, requests: 0, queueSuccess: 0, allocationSuccess: 0 };
+      group.users += 1;
+      metrics.behaviorGroups[user.profile] = group;
       metrics.activeVirtualUsers += 1;
       for (const action of actionsForProfile(user.profile, configuration.burstSize)) {
         if (dependencies.isCancelled?.() || now() >= deadline) break;
@@ -102,6 +108,16 @@ export async function runSimulation(
         try {
           const result = await dependencies.executeAction(user, action);
           recordSimulationAction(metrics, action, user.profile, result, latencies);
+          if (action === "QUEUE_JOIN" && result.statusCode < 300 && !result.duplicate && result.participantId) {
+            if (queuedParticipants.has(result.participantId)) metrics.integrity.duplicateQueueEntries += 1;
+            queuedParticipants.add(result.participantId);
+          }
+          if (action === "ALLOCATION_CLAIM" && result.statusCode < 300 && !result.duplicate) {
+            if (result.participantId && allocatedParticipants.has(result.participantId)) metrics.integrity.duplicateParticipantAllocations += 1;
+            if (result.seatId && allocatedSeats.has(result.seatId)) metrics.integrity.duplicateSeatAssignments += 1;
+            if (result.participantId) allocatedParticipants.add(result.participantId);
+            if (result.seatId) allocatedSeats.add(result.seatId);
+          }
         } catch {
           recordSimulationAction(metrics, action, user.profile, { endpoint: "internal", statusCode: 500, latencyMs: 0 }, latencies);
           metrics.errors.unexpected += 1;
@@ -120,6 +136,9 @@ export async function runSimulation(
   await Promise.all(Array.from({ length: Math.min(configuration.maxConcurrency, configuration.virtualUsers) }, worker));
   const completedAt = new Date(now()).toISOString();
   finalizeLatency(metrics, latencies, Math.max(0, now() - startedMs));
+  metrics.integrity.uniqueSeats = allocatedSeats.size;
+  metrics.integrity.overselling = Math.max(0, allocatedSeats.size - 500);
+  metrics.integrity.seatsRemaining = Math.max(0, 500 - allocatedSeats.size);
   await dependencies.onProgress?.(metrics);
   return {
     simulationRunId, dropId, status: dependencies.isCancelled?.() ? "CANCELLED" : "COMPLETED",

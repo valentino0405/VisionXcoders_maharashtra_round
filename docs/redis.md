@@ -1,4 +1,25 @@
-# Redis key naming convention
+# Upstash Redis
+
+FairDrop uses Upstash Redis because its HTTP-based, connectionless client is well suited to Next.js and serverless deployments. It provides managed Redis without requiring Docker or a local Redis server.
+
+## Setup
+
+Create or select a Redis database in the [Upstash Console](https://console.upstash.com/). In the database's REST API section, copy the REST URL and REST token into the project root's `.env.local` file:
+
+```dotenv
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
+```
+
+Restart the Next.js development server after changing environment variables. Test connectivity with:
+
+```text
+GET /api/health/redis
+```
+
+A successful check returns HTTP 200 with `{ "redis": "ok" }`. A failed check returns HTTP 500 with `{ "redis": "error" }` without exposing credentials.
+
+## Key naming convention
 
 FairDrop Redis keys must use this structure:
 
@@ -25,3 +46,10 @@ fairdrop:{environment}:experiment:{experimentId}
 ```
 
 These patterns are documentation only. Phase 1 does not create any of these keys or implement the associated systems.
+
+## Security
+
+- Keep the REST URL and token server-side and never prefix them with `NEXT_PUBLIC_`.
+- Do not commit `.env.local` or include credentials in logs, browser responses, or client components.
+- Configure the same environment variable names in the deployment platform's protected server-side settings.
+- Rotate the REST token in Upstash immediately if it is ever exposed.

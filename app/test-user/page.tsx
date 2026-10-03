@@ -41,7 +41,7 @@ export default function TestUserPage() {
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Clerk + MongoDB Atlas Test Page</h1>
-      
+
       <div className="mb-4">
         <strong>Authentication Status:</strong> {isSignedIn ? "Signed in" : "Signed out"}
       </div>

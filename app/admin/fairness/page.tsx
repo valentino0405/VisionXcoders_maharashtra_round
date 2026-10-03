@@ -20,7 +20,7 @@ export default function FairnessPage() {
             <Info className="h-3 w-3" /> Baseline: 50%
           </p>
         </div>
-        
+
         <div className="glass-card p-6 rounded-xl border border-white/10">
           <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Bot Allocation</div>
           <div className="text-4xl font-bold text-red-400 font-mono">3.1%</div>
@@ -43,25 +43,25 @@ export default function FairnessPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card p-6 rounded-xl border border-white/10">
           <h3 className="font-bold text-white mb-6">Allocation vs Request Rate</h3>
-          
+
           <div className="h-64 flex items-end gap-2 px-4 pb-4 border-b border-l border-white/10 relative">
-             <div className="absolute inset-0 flex items-center justify-center text-gray-600 opacity-20">
-               [Scatter Plot Visualization Area]
-             </div>
-             {/* Fake trendline visualization */}
-             <div className="w-full h-full relative">
-                <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible preserve-3d" preserveAspectRatio="none">
-                  {/* Normal users cluster */}
-                  <circle cx="20" cy="50" r="15" fill="rgba(59, 130, 246, 0.2)" />
-                  <circle cx="25" cy="45" r="10" fill="rgba(59, 130, 246, 0.4)" />
-                  <circle cx="15" cy="55" r="8" fill="rgba(59, 130, 246, 0.6)" />
-                  
-                  {/* Bot cluster (high req, low alloc) */}
-                  <circle cx="80" cy="90" r="10" fill="rgba(239, 68, 68, 0.2)" />
-                  <circle cx="90" cy="85" r="12" fill="rgba(239, 68, 68, 0.4)" />
-                  <circle cx="85" cy="95" r="8" fill="rgba(239, 68, 68, 0.6)" />
-                </svg>
-             </div>
+            <div className="absolute inset-0 flex items-center justify-center text-gray-600 opacity-20">
+              [Scatter Plot Visualization Area]
+            </div>
+            {/* Fake trendline visualization */}
+            <div className="w-full h-full relative">
+              <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible preserve-3d" preserveAspectRatio="none">
+                {/* Normal users cluster */}
+                <circle cx="20" cy="50" r="15" fill="rgba(59, 130, 246, 0.2)" />
+                <circle cx="25" cy="45" r="10" fill="rgba(59, 130, 246, 0.4)" />
+                <circle cx="15" cy="55" r="8" fill="rgba(59, 130, 246, 0.6)" />
+
+                {/* Bot cluster (high req, low alloc) */}
+                <circle cx="80" cy="90" r="10" fill="rgba(239, 68, 68, 0.2)" />
+                <circle cx="90" cy="85" r="12" fill="rgba(239, 68, 68, 0.4)" />
+                <circle cx="85" cy="95" r="8" fill="rgba(239, 68, 68, 0.6)" />
+              </svg>
+            </div>
           </div>
           <div className="flex justify-between text-xs text-gray-500 mt-2">
             <span>Low Requests (Normal)</span>
@@ -78,11 +78,11 @@ export default function FairnessPage() {
             <div className="space-y-4 text-gray-400 text-sm mt-6">
               <p>In traditional systems, probability of allocation is directly proportional to request volume and network proximity.</p>
               <p>FairDrop decouples these metrics, ensuring that a user making 1 legitimate request has an equal or greater probability of allocation compared to an adversarial client making 1,000 automated requests.</p>
-              
+
               <div className="p-4 bg-violet-900/10 border border-violet-500/20 rounded-lg mt-4">
                 <div className="text-violet-300 font-mono text-xs">
-                  P(Alloc | Normal) = {((312/48000)*100).toFixed(2)}% <br/>
-                  P(Alloc | Bot) = {((12/2000)*100).toFixed(2)}%
+                  P(Alloc | Normal) = {((312 / 48000) * 100).toFixed(2)}% <br />
+                  P(Alloc | Bot) = {((12 / 2000) * 100).toFixed(2)}%
                 </div>
               </div>
             </div>

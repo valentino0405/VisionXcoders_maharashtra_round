@@ -1,9 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 
+import { evaluateAbuseRequest, recordAbuseEvent } from "@/lib/abuse-engine";
+import { abuseEnforcementResponse } from "@/lib/abuse-http";
 import { parseDropJoinRequest } from "@/lib/drop-engine";
 import connectToDatabase from "@/lib/mongodb";
 import { QueueUnavailableError, getQueueStatusForUser } from "@/lib/queue-service";
-import { getQueueTokenSecret, verifyQueueToken } from "@/lib/queue-token";
+import { getQueueTokenSecret, verifyQueueTokenDetailed } from "@/lib/queue-token";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,8 +20,27 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const input = parseDropJoinRequest({ dropId: url.searchParams.get("dropId") });
+    const abuseDecision = await evaluateAbuseRequest({
+      clerkId: userId,
+      action: "QUEUE_STATUS",
+      endpoint: "/api/queue/status",
+      dropId: input?.dropId,
+    });
+    const enforcement = abuseEnforcementResponse(abuseDecision);
+
+    if (enforcement) {
+      return enforcement;
+    }
 
     if (!input) {
+      const invalidDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "QUEUE_STATUS",
+        event: "INVALID_REQUEST",
+        endpoint: "/api/queue/status",
+      });
+      const invalidEnforcement = abuseEnforcementResponse(invalidDecision);
+      if (invalidEnforcement) return invalidEnforcement;
       return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
@@ -37,7 +58,7 @@ export async function GET(request: Request) {
 
     const authorization = request.headers.get("authorization");
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
-    const verified = verifyQueueToken(
+    const verification = verifyQueueTokenDetailed(
       token,
       {
         dropId: result.queue.dropId,
@@ -47,7 +68,23 @@ export async function GET(request: Request) {
       getQueueTokenSecret()
     );
 
-    if (!verified) {
+    if (!verification.valid) {
+      const event =
+        verification.reason === "CROSS_DROP"
+          ? "CROSS_DROP_TOKEN"
+          : verification.reason === "CROSS_PARTICIPANT" ||
+              verification.reason === "CROSS_QUEUE_ENTRY"
+            ? "CROSS_PARTICIPANT_TOKEN"
+            : "INVALID_QUEUE_TOKEN";
+      const tokenDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "QUEUE_STATUS",
+        event,
+        endpoint: "/api/queue/status",
+        dropId: input.dropId,
+      });
+      const tokenEnforcement = abuseEnforcementResponse(tokenDecision);
+      if (tokenEnforcement) return tokenEnforcement;
       return Response.json({ error: "INVALID_QUEUE_TOKEN" }, { status: 401 });
     }
 

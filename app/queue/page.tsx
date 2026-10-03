@@ -33,6 +33,10 @@ export default function QueuePage() {
             setError(
               joinResponse.status === 401
                 ? "Sign in to enter the queue."
+                : joinResponse.status === 429
+                  ? "Too many requests. Please try again in a few seconds."
+                  : joinResponse.status === 403
+                    ? "Access is temporarily restricted. Please try again later."
                 : joinResult.error === "NOT_A_PARTICIPANT"
                   ? "Join the drop before entering the queue."
                   : "Queue state is temporarily unavailable."

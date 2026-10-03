@@ -11,6 +11,19 @@ export type QueueTokenPayload = {
   expiresAt: number;
 };
 
+export type QueueTokenVerification =
+  | { valid: true; payload: QueueTokenPayload }
+  | {
+      valid: false;
+      reason:
+        | "MALFORMED"
+        | "INVALID_SIGNATURE"
+        | "EXPIRED"
+        | "CROSS_DROP"
+        | "CROSS_PARTICIPANT"
+        | "CROSS_QUEUE_ENTRY";
+    };
+
 const TOKEN_LIFETIME_SECONDS = 24 * 60 * 60;
 
 function encode(value: string): string {
@@ -47,16 +60,16 @@ export function issueQueueToken(
   return `${encodedPayload}.${signature(encodedPayload, secret)}`;
 }
 
-export function verifyQueueToken(
+export function verifyQueueTokenDetailed(
   token: string,
   expected: Pick<QueueTokenPayload, "dropId" | "participantId" | "queueEntryId">,
   secret: string,
   now = new Date()
-): QueueTokenPayload | null {
+): QueueTokenVerification {
   const parts = token.split(".");
 
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return null;
+    return { valid: false, reason: "MALFORMED" };
   }
 
   const expectedSignature = signature(parts[0], secret);
@@ -67,7 +80,7 @@ export function verifyQueueToken(
     providedSignature.length !== expectedSignatureBuffer.length ||
     !timingSafeEqual(providedSignature, expectedSignatureBuffer)
   ) {
-    return null;
+    return { valid: false, reason: "INVALID_SIGNATURE" };
   }
 
   try {
@@ -76,19 +89,40 @@ export function verifyQueueToken(
 
     if (
       payload.version !== 1 ||
-      payload.dropId !== expected.dropId ||
-      payload.participantId !== expected.participantId ||
-      payload.queueEntryId !== expected.queueEntryId ||
+      typeof payload.dropId !== "string" ||
+      typeof payload.participantId !== "string" ||
+      typeof payload.queueEntryId !== "string" ||
       typeof payload.issuedAt !== "number" ||
-      typeof payload.expiresAt !== "number" ||
-      payload.issuedAt > nowSeconds + 60 ||
-      payload.expiresAt <= nowSeconds
+      typeof payload.expiresAt !== "number"
     ) {
-      return null;
+      return { valid: false, reason: "MALFORMED" };
     }
 
-    return payload as QueueTokenPayload;
+    if (payload.issuedAt > nowSeconds + 60 || payload.expiresAt <= nowSeconds) {
+      return { valid: false, reason: "EXPIRED" };
+    }
+    if (payload.dropId !== expected.dropId) {
+      return { valid: false, reason: "CROSS_DROP" };
+    }
+    if (payload.participantId !== expected.participantId) {
+      return { valid: false, reason: "CROSS_PARTICIPANT" };
+    }
+    if (payload.queueEntryId !== expected.queueEntryId) {
+      return { valid: false, reason: "CROSS_QUEUE_ENTRY" };
+    }
+
+    return { valid: true, payload: payload as QueueTokenPayload };
   } catch {
-    return null;
+    return { valid: false, reason: "MALFORMED" };
   }
+}
+
+export function verifyQueueToken(
+  token: string,
+  expected: Pick<QueueTokenPayload, "dropId" | "participantId" | "queueEntryId">,
+  secret: string,
+  now = new Date()
+): QueueTokenPayload | null {
+  const result = verifyQueueTokenDetailed(token, expected, secret, now);
+  return result.valid ? result.payload : null;
 }

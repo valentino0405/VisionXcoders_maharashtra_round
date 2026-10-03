@@ -1,5 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 
+import { evaluateAbuseRequest, recordAbuseEvent } from "@/lib/abuse-engine";
+import { abuseEnforcementResponse } from "@/lib/abuse-http";
 import { parseDropJoinRequest } from "@/lib/drop-engine";
 import connectToDatabase from "@/lib/mongodb";
 import { QueueEngineError } from "@/lib/queue-engine";
@@ -26,7 +28,27 @@ export async function POST(request: Request) {
     }
 
     const input = parseDropJoinRequest(body);
+    const abuseDecision = await evaluateAbuseRequest({
+      clerkId: userId,
+      action: "QUEUE_JOIN",
+      endpoint: "/api/queue/join",
+      dropId: input?.dropId,
+    });
+    const enforcement = abuseEnforcementResponse(abuseDecision);
+
+    if (enforcement) {
+      return enforcement;
+    }
+
     if (!input) {
+      const invalidDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "QUEUE_JOIN",
+        event: "INVALID_REQUEST",
+        endpoint: "/api/queue/join",
+      });
+      const invalidEnforcement = abuseEnforcementResponse(invalidDecision);
+      if (invalidEnforcement) return invalidEnforcement;
       return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
@@ -34,6 +56,19 @@ export async function POST(request: Request) {
     await QueueEntry.init();
 
     const result = await enterQueueForUser(input.dropId, userId);
+
+    if (!result.created) {
+      const duplicateDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "QUEUE_JOIN",
+        event: "DUPLICATE_QUEUE_JOIN",
+        endpoint: "/api/queue/join",
+        dropId: input.dropId,
+      });
+      const duplicateEnforcement = abuseEnforcementResponse(duplicateDecision);
+      if (duplicateEnforcement) return duplicateEnforcement;
+    }
+
     const token = issueQueueToken(
       {
         dropId: result.queue.dropId,

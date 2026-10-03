@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { evaluateAbuseRequest, recordAbuseEvent } from "@/lib/abuse-engine";
+import { abuseEnforcementResponse } from "@/lib/abuse-http";
 import {
   DropEngineError,
   joinDrop,
@@ -103,8 +105,27 @@ export async function POST(request: Request) {
     }
 
     const input = parseDropJoinRequest(body);
+    const abuseDecision = await evaluateAbuseRequest({
+      clerkId: userId,
+      action: "DROP_JOIN",
+      endpoint: "/api/drop/join",
+      dropId: input?.dropId,
+    });
+    const enforcement = abuseEnforcementResponse(abuseDecision);
+
+    if (enforcement) {
+      return enforcement;
+    }
 
     if (!input) {
+      const invalidDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "DROP_JOIN",
+        event: "INVALID_REQUEST",
+        endpoint: "/api/drop/join",
+      });
+      const invalidEnforcement = abuseEnforcementResponse(invalidDecision);
+      if (invalidEnforcement) return invalidEnforcement;
       return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
     }
 
@@ -135,6 +156,18 @@ export async function POST(request: Request) {
         console.error("Redis participant state update failed");
       },
     });
+
+    if (!result.created) {
+      const duplicateDecision = await recordAbuseEvent({
+        clerkId: userId,
+        action: "DROP_JOIN",
+        event: "DUPLICATE_DROP_JOIN",
+        endpoint: "/api/drop/join",
+        dropId: input.dropId,
+      });
+      const duplicateEnforcement = abuseEnforcementResponse(duplicateDecision);
+      if (duplicateEnforcement) return duplicateEnforcement;
+    }
 
     return Response.json(
       {

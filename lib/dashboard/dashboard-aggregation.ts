@@ -15,6 +15,7 @@ export function aggregateDashboard(run: RunInput, experiment: ExperimentInput) {
   const active = activeStatus.has(experiment?.status ?? run?.status ?? "");
   const comparison = experiment?.comparison ?? null;
   return {
+    hasData: Boolean(run || experiment),
     active,
     operations: {
       activeVirtualUsers: metrics?.activeVirtualUsers ?? 0,

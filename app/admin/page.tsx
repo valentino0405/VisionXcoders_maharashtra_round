@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Activity, AlertTriangle, Layers, ShieldCheck, Users } from "lucide-react";
 
 type Dashboard = {
+  hasData: boolean;
   active: boolean;
   operations: { activeVirtualUsers: number; queueDepth: number; requestsPerSecond: number; seatsRemaining: number; suspiciousTraffic: number; throttledRequests: number; blockedRequests: number; allocationRate: number; p95LatencyMs: number; p99LatencyMs: number };
   fairness: { queuePositionDistribution: number[]; normalizedQueuePosition: number | null; allocationRateByBehavior: Record<string, number | null>; normalVsAttackDifference: number | string | null; participationRate: number | null; queueEntryRate: number | null; retryResilience: number | null; throttleRate: number | null; blockRate: number | null };
@@ -28,8 +29,9 @@ export default function AdminOverview() {
     void refresh();
     return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, []);
-  if (error) return <div className="p-8 text-red-300">Dashboard data is unavailable.</div>;
+  if (error) return <div className="p-8"><h1 className="text-xl font-bold text-white">Unable to load dashboard data</h1><p className="text-red-300 mt-2">Try again.</p></div>;
   if (!dashboard) return <div className="p-8 text-gray-400">Loading aggregate metrics…</div>;
+  if (!dashboard.hasData) return <div className="p-6 md:p-8 w-full max-w-3xl mx-auto"><section className="glass-card rounded-xl border border-white/10 p-10 text-center"><h1 className="text-2xl font-bold text-white">No dashboard data yet</h1><p className="text-gray-400 mt-2">Run a simulator or experiment to populate live metrics.</p><div className="mt-6 flex justify-center gap-3"><Link href="/admin/simulator" className="px-4 py-2 rounded-lg bg-violet-600 text-white">Open simulator</Link><Link href="/admin/experiments" className="px-4 py-2 rounded-lg border border-white/10 text-gray-200">Open experiments</Link></div></section></div>;
   const o = dashboard.operations;
   return <div className="p-6 md:p-8 w-full space-y-8">
     <div><h1 className="text-3xl font-bold text-white">Operations Overview</h1><p className="text-gray-400 mt-2">Latest safe aggregate simulator and experiment metrics.</p></div>

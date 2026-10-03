@@ -62,8 +62,8 @@ export default function ExperimentsPage() {
         <NumberInput label="Concurrency" value={concurrency} min={1} max={500} onChange={setConcurrency} />
         <NumberInput label="Request rate" value={requestRate} min={1} max={2_000} onChange={setRequestRate} />
         <NumberInput label="Seed" value={seed} min={0} max={2_147_483_647} onChange={setSeed} />
-        <label className="block text-sm text-gray-300">Scenario<select className="control" value={scenario} onChange={(event) => setScenario(event.target.value)}>{scenarios.map((value) => <option key={value}>{value}</option>)}</select></label>
-        <label className="block text-sm text-gray-300">Mixed distribution (optional JSON)<textarea className="control text-xs" rows={3} value={distribution} onChange={(event) => setDistribution(event.target.value)} /></label>
+        <label className="block text-sm text-gray-300">Scenario<select className="mt-2 w-full bg-black border border-white/10 rounded p-2" value={scenario} onChange={(event) => setScenario(event.target.value)}>{scenarios.map((value) => <option key={value}>{value}</option>)}</select></label>
+        <label className="block text-sm text-gray-300">Mixed distribution (optional JSON)<textarea className="mt-2 w-full bg-black border border-white/10 rounded p-2 text-xs" rows={3} value={distribution} onChange={(event) => setDistribution(event.target.value)} /></label>
         <button onClick={active ? stop : start} className="w-full h-12 rounded-lg bg-violet-600 text-white font-bold flex items-center justify-center gap-2">{active ? <><Square className="h-4 w-4" /> Stop</> : <><Play className="h-4 w-4" /> Start experiment</>}</button>
         {error ? <p className="text-red-300 text-sm">{error}</p> : null}
       </section>
@@ -72,7 +72,6 @@ export default function ExperimentsPage() {
         {experiment?.comparison ? <ComparisonTable comparison={experiment.comparison} /> : null}
       </section>
     </div>
-    <style jsx>{`.control{display:block;margin-top:.5rem;width:100%;background:#000;border:1px solid rgba(255,255,255,.1);border-radius:.375rem;padding:.5rem}`}</style>
   </div>;
 }
 
@@ -82,6 +81,6 @@ function ComparisonTable({ comparison }: { comparison: NonNullable<Experiment["c
 }
 function display(value: Value) { return value === "NOT_APPLICABLE" ? "N/A" : Number.isFinite(value) ? value.toFixed(3) : "—"; }
 function format(value?: number) { return value === undefined ? "—" : value.toFixed(1); }
-function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block text-sm text-gray-300">{label}<input className="control" value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
-function NumberInput({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) { return <label className="block text-sm text-gray-300">{label}<input className="control" type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>; }
+function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <label className="block text-sm text-gray-300">{label}<input className="mt-2 w-full bg-black border border-white/10 rounded p-2" value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
+function NumberInput({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) { return <label className="block text-sm text-gray-300">{label}<input className="mt-2 w-full bg-black border border-white/10 rounded p-2" type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>; }
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-white/5 bg-black/30 p-3"><div className="text-xs uppercase text-gray-500">{label}</div><div className="mt-1 font-mono text-white break-words">{value}</div></div>; }

@@ -21,7 +21,8 @@
     "test:simulator": "node --experimental-strip-types --test tests/simulator-engine.test.ts",
     "test:simulator:large": "node --experimental-strip-types --test tests/simulator-large.test.ts",
     "test:experiments": "node --experimental-strip-types --test tests/experiment-engine.test.ts",
-    "test:dashboard": "node --experimental-strip-types --test tests/dashboard-aggregation.test.ts"
+    "test:dashboard": "node --experimental-strip-types --test tests/dashboard-aggregation.test.ts",
+    "test:reports": "node --experimental-strip-types --test tests/report-engine.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <LayoutDashboard className="h-4 w-4" /> Overview
           </Link>
           <div className="text-xs font-semibold text-gray-600 tracking-widest uppercase mt-6 mb-2 px-3">Monitoring</div>
-          <Link href="/admin" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+          <Link href="/admin/traffic" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
             <Activity className="h-4 w-4" /> Traffic
           </Link>
           <Link href="/admin/fairness" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors">

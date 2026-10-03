@@ -9,7 +9,12 @@
     "lint": "eslint",
     "seed:drop": "node scripts/seed-demo-drop.mjs",
     "test:drop": "node --experimental-strip-types --test tests/drop-engine.test.ts",
-    "test:drop:integration": "node scripts/verify-drop-concurrency.mjs"
+    "test:drop:integration": "node scripts/verify-drop-concurrency.mjs",
+    "test:queue": "node --conditions=react-server --experimental-strip-types --test tests/queue-engine.test.ts",
+    "test:queue:integration": "node scripts/verify-queue-concurrency.mjs",
+    "test:abuse": "node --conditions=react-server --experimental-strip-types --test tests/abuse-engine.test.ts",
+    "test:abuse:integration": "node --conditions=react-server --experimental-strip-types scripts/verify-abuse-concurrency.mjs",
+    "test:fairness": "node --experimental-strip-types --test tests/fairness-engine.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

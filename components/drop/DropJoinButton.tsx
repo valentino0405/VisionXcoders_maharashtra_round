@@ -25,7 +25,14 @@ export default function DropJoinButton() {
       });
 
       if (!response.ok) {
-        const message = response.status === 401 ? "Sign in to join the drop." : "Unable to join the drop.";
+        const message =
+          response.status === 401
+            ? "Sign in to join the drop."
+            : response.status === 429
+              ? "Too many requests. Please try again in a few seconds."
+              : response.status === 403
+                ? "Access is temporarily restricted. Please try again later."
+                : "Unable to join the drop.";
         setError(message);
         return;
       }

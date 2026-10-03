@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const redis = await getRedisClient();
+    const redis = getRedisClient();
     const response = await redis.ping();
 
     if (response !== "PONG") {

@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:drop": "node scripts/seed-demo-drop.mjs",
+    "test:drop": "node --experimental-strip-types --test tests/drop-engine.test.ts",
+    "test:drop:integration": "node scripts/verify-drop-concurrency.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

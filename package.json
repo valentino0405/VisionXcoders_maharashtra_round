@@ -16,7 +16,10 @@
     "test:abuse:integration": "node --conditions=react-server --experimental-strip-types scripts/verify-abuse-concurrency.mjs",
     "test:fairness": "node --experimental-strip-types --test tests/fairness-engine.test.ts",
     "test:allocation": "node --experimental-strip-types --test tests/allocation-engine.test.ts",
-    "test:allocation:integration": "node scripts/verify-allocation-concurrency.mjs"
+    "test:allocation:integration": "node scripts/verify-allocation-concurrency.mjs",
+    "test:session": "node --experimental-strip-types --test tests/session-engine.test.ts",
+    "test:simulator": "node --experimental-strip-types --test tests/simulator-engine.test.ts",
+    "test:simulator:large": "node --experimental-strip-types --test tests/simulator-large.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

@@ -1,0 +1,128 @@
+import { createVirtualUser } from "./simulator-users.ts";
+import { emptySimulationMetrics, finalizeLatency, recordSimulationAction } from "./simulator-metrics.ts";
+import {
+  MAX_CONCURRENCY, MAX_DURATION_SECONDS, MAX_REQUEST_RATE, MAX_VIRTUAL_USERS,
+  SIMULATION_SCENARIOS,
+  type ResolvedSimulationConfig, type SimulationAction, type SimulationActionResult,
+  type SimulationConfig, type SimulationResult, type VirtualUser, type VirtualUserProfile,
+} from "./simulator-types.ts";
+
+const DEFAULT_DISTRIBUTION: Record<VirtualUserProfile, number> = {
+  NORMAL_TRAFFIC: 65, REQUEST_FLOOD: 10, BOT_SWARM: 10, DUPLICATE_ATTEMPTS: 5, TOKEN_REPLAY: 5, QUEUE_MANIPULATION: 5,
+};
+
+export class SimulationConfigError extends Error {
+  constructor(message: string) { super(message); this.name = "SimulationConfigError"; }
+}
+
+export function validateSimulationConfig(config: SimulationConfig): ResolvedSimulationConfig {
+  if (!SIMULATION_SCENARIOS.includes(config.scenario)) throw new SimulationConfigError("Unsupported simulation scenario");
+  const integer = (value: number, label: string, max: number) => {
+    if (!Number.isSafeInteger(value) || value < 1 || value > max) throw new SimulationConfigError(`${label} exceeds simulator safety limits`);
+  };
+  integer(config.virtualUsers, "virtualUsers", MAX_VIRTUAL_USERS);
+  integer(config.durationSeconds, "durationSeconds", MAX_DURATION_SECONDS);
+  integer(config.maxConcurrency, "maxConcurrency", MAX_CONCURRENCY);
+  integer(config.requestRate, "requestRate", MAX_REQUEST_RATE);
+  if (config.burstSize !== undefined && (!Number.isSafeInteger(config.burstSize) || config.burstSize < 1 || config.burstSize > 100)) throw new SimulationConfigError("burstSize exceeds simulator safety limits");
+  if (config.jitterMs !== undefined && (!Number.isSafeInteger(config.jitterMs) || config.jitterMs < 0 || config.jitterMs > 10_000)) throw new SimulationConfigError("jitterMs exceeds simulator safety limits");
+  if (config.warmupSeconds !== undefined && (!Number.isSafeInteger(config.warmupSeconds) || config.warmupSeconds < 0 || config.warmupSeconds >= config.durationSeconds)) throw new SimulationConfigError("warmupSeconds must be shorter than durationSeconds");
+  if (config.maxConcurrency > config.virtualUsers) throw new SimulationConfigError("maxConcurrency cannot exceed virtualUsers");
+  const distribution = { ...DEFAULT_DISTRIBUTION, ...config.attackDistribution };
+  if (config.scenario === "MIXED_ATTACK") {
+    const total = Object.values(distribution).reduce((sum, value) => sum + value, 0);
+    if (!Object.values(distribution).every((value) => Number.isFinite(value) && value >= 0) || total !== 100) {
+      throw new SimulationConfigError("Mixed attack distribution must total 100 percent");
+    }
+  }
+  return {
+    ...config,
+    seed: Number.isSafeInteger(config.seed) ? config.seed! : 20260308,
+    burstSize: config.burstSize ?? 1,
+    jitterMs: config.jitterMs ?? 0,
+    warmupSeconds: config.warmupSeconds ?? 0,
+    attackDistribution: distribution,
+  };
+}
+
+function actionsForProfile(profile: VirtualUserProfile, burstSize: number): SimulationAction[] {
+  switch (profile) {
+    case "REQUEST_FLOOD": return ["DROP_JOIN", "QUEUE_JOIN", ...Array.from({ length: 4 + burstSize }, () => "QUEUE_STATUS" as const), "QUEUE_JOIN", "QUEUE_JOIN"];
+    case "BOT_SWARM": return ["DROP_JOIN", "QUEUE_JOIN", "QUEUE_JOIN", "QUEUE_STATUS", "QUEUE_STATUS", "ALLOCATION_CLAIM"];
+    case "DUPLICATE_ATTEMPTS": return ["DROP_JOIN", "DROP_JOIN", "QUEUE_JOIN", "QUEUE_JOIN", "ALLOCATION_CLAIM", "ALLOCATION_CLAIM"];
+    case "TOKEN_REPLAY": return ["DROP_JOIN", "QUEUE_JOIN", "TOKEN_REPLAY", "TOKEN_REPLAY", "QUEUE_STATUS"];
+    case "QUEUE_MANIPULATION": return ["DROP_JOIN", "QUEUE_JOIN", "QUEUE_JOIN", "QUEUE_JOIN", "QUEUE_STATUS", "QUEUE_STATUS"];
+    default: return ["DROP_JOIN", "QUEUE_JOIN", "QUEUE_STATUS", "SESSION_RECOVERY", "ALLOCATION_CLAIM"];
+  }
+}
+
+export type SimulationDependencies = {
+  executeAction: (user: VirtualUser, action: SimulationAction) => Promise<SimulationActionResult>;
+  isCancelled?: () => boolean;
+  onProgress?: (metrics: SimulationResult["metrics"]) => Promise<void> | void;
+  now?: () => number;
+  sleep?: (milliseconds: number) => Promise<void>;
+};
+
+export async function runSimulation(
+  simulationRunId: string,
+  dropId: string,
+  input: SimulationConfig,
+  dependencies: SimulationDependencies
+): Promise<SimulationResult> {
+  const configuration = validateSimulationConfig(input);
+  const now = dependencies.now ?? Date.now;
+  const sleep = dependencies.sleep ?? ((milliseconds) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const startedMs = now();
+  const deadline = startedMs + configuration.durationSeconds * 1_000;
+  const metrics = emptySimulationMetrics(configuration.virtualUsers);
+  const latencies: number[] = [];
+  let nextUserIndex = 0;
+  let nextRequestAt = startedMs;
+  let lastProgressAt = startedMs;
+
+  const takeRateSlot = async () => {
+    const slot = nextRequestAt;
+    nextRequestAt = Math.max(nextRequestAt, now()) + 1_000 / configuration.requestRate;
+    const wait = slot - now();
+    if (wait > 0) await sleep(wait);
+  };
+  const worker = async () => {
+    if (configuration.warmupSeconds) await sleep(configuration.warmupSeconds * 1_000);
+    while (true) {
+      if (dependencies.isCancelled?.() || now() >= deadline) return;
+      const index = nextUserIndex++;
+      if (index >= configuration.virtualUsers) return;
+      const user = createVirtualUser(index, simulationRunId, configuration);
+      metrics.activeVirtualUsers += 1;
+      for (const action of actionsForProfile(user.profile, configuration.burstSize)) {
+        if (dependencies.isCancelled?.() || now() >= deadline) break;
+        await takeRateSlot();
+        if (dependencies.isCancelled?.() || now() >= deadline) break;
+        try {
+          const result = await dependencies.executeAction(user, action);
+          recordSimulationAction(metrics, action, user.profile, result, latencies);
+        } catch {
+          recordSimulationAction(metrics, action, user.profile, { endpoint: "internal", statusCode: 500, latencyMs: 0 }, latencies);
+          metrics.errors.unexpected += 1;
+        }
+        if (configuration.jitterMs) await sleep((user.seed + metrics.totalRequests) % (configuration.jitterMs + 1));
+        if (now() - lastProgressAt >= 1_000) {
+          lastProgressAt = now();
+          await dependencies.onProgress?.(metrics);
+        }
+      }
+      metrics.activeVirtualUsers -= 1;
+      metrics.completedVirtualUsers += 1;
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(configuration.maxConcurrency, configuration.virtualUsers) }, worker));
+  const completedAt = new Date(now()).toISOString();
+  finalizeLatency(metrics, latencies, Math.max(0, now() - startedMs));
+  await dependencies.onProgress?.(metrics);
+  return {
+    simulationRunId, dropId, status: dependencies.isCancelled?.() ? "CANCELLED" : "COMPLETED",
+    configuration, startedAt: new Date(startedMs).toISOString(), completedAt, metrics, errorSummary: null,
+  };
+}

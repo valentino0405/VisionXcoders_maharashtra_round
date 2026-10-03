@@ -153,7 +153,7 @@ export async function startSimulation(config: SimulationConfig) {
   const dropId = simulationDropId(simulationRunId);
   const control = { cancelled: false };
   activeRuns.set(simulationRunId, control);
-  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers) });
+  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved) });
   await updateSimulationRun(simulationRunId, { status: "STARTING" });
   void execute({ simulationRunId, dropId, config: resolved, control });
   return { simulationRunId, dropId, status: "STARTING" as SimulationRunStatus };

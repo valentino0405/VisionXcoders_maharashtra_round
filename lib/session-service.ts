@@ -66,15 +66,17 @@ async function recoverAuthoritativeState(
     return { activeDropId: null, drop: null, participation: null, queue: null, allocation: null };
   }
 
-  const drop = await Drop.findOne({ dropId: participation.dropId }).lean();
-  const queue = await QueueEntry.findOne({
-    dropId: participation.dropId,
-    participantId: participation.participantId,
-  }).lean();
-  const allocation = await Allocation.findOne({
-    dropId: participation.dropId,
-    participantId: participation.participantId,
-  }).lean();
+  const [drop, queue, allocation] = await Promise.all([
+    Drop.findOne({ dropId: participation.dropId }).lean(),
+    QueueEntry.findOne({
+      dropId: participation.dropId,
+      participantId: participation.participantId,
+    }).lean(),
+    Allocation.findOne({
+      dropId: participation.dropId,
+      participantId: participation.participantId,
+    }).lean(),
+  ]);
 
   // Linked records must agree with the durable participant/queue identity before exposure.
   const consistentQueue = queue && queue.participantId === participation.participantId ? queue : null;

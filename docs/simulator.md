@@ -20,6 +20,8 @@ A seed deterministically assigns virtual-user profiles and jitter decisions. Rep
 
 At most `maxConcurrency` workers run. Workers take a shared rate slot before each action, so the simulator never creates 50,000 timers or `Promise.all(50_000)` requests. Metrics are real action outcomes: endpoint/profile traffic, response classes, 429/403 enforcement, latency average/P50/P95/P99/max, duplicate/invalid-token/ownership signals, queue joins/failures, allocation attempts/results, and errors.
 
+The run result also records the configured request-rate target, actual completed-action rate, elapsed time, worker and in-flight peaks, scheduled-action delay, completed/timed-out/cancelled/failed workflows, and aggregate action latency by phase. A configured rate is a ceiling, not a promise: real MongoDB, Upstash, and abuse-control latency can make the measured rate lower. Queue-status polling is read-first; its Redis mirror is repaired only when the queue ordering entry is absent.
+
 ## Admin API and UI
 
 All endpoints require Clerk authentication plus a fail-closed `FAIRDROP_ADMIN_CLERK_IDS` server allowlist:

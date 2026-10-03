@@ -41,6 +41,23 @@ export type SimulationMetrics = {
   totalVirtualUsers: number;
   activeVirtualUsers: number;
   completedVirtualUsers: number;
+  execution: {
+    configuredRequestRate: number;
+    elapsedMs: number;
+    workerLimit: number;
+    activeWorkers: number;
+    peakActiveWorkers: number;
+    inFlightRequests: number;
+    peakInFlightRequests: number;
+    startedVirtualUsers: number;
+    timedOutVirtualUsers: number;
+    cancelledVirtualUsers: number;
+    failedVirtualUsers: number;
+    scheduledRequests: number;
+    lateScheduleCount: number;
+    scheduleDelayMs: number;
+    actionLatency: Record<string, { count: number; totalMs: number; maxMs: number }>;
+  };
   totalRequests: number;
   requestsPerSecond: number;
   requestsByEndpoint: Record<string, number>;

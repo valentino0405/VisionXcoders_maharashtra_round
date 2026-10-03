@@ -14,6 +14,15 @@ type Run = {
     responses: { throttled429: number };
     latency: { p95Ms: number };
     allocation: { successful: number };
+    execution?: {
+      configuredRequestRate: number;
+      elapsedMs: number;
+      peakInFlightRequests: number;
+      timedOutVirtualUsers: number;
+      cancelledVirtualUsers: number;
+      failedVirtualUsers: number;
+      lateScheduleCount: number;
+    };
   };
 };
 
@@ -89,6 +98,15 @@ export default function SimulatorPage() {
         responses: { throttled429: 0 },
         latency: { p95Ms: 0 },
         allocation: { successful: 0 },
+        execution: {
+          configuredRequestRate: requestRate,
+          elapsedMs: 0,
+          peakInFlightRequests: 0,
+          timedOutVirtualUsers: 0,
+          cancelledVirtualUsers: 0,
+          failedVirtualUsers: 0,
+          lateScheduleCount: 0,
+        },
       },
     });
   }
@@ -124,15 +142,23 @@ export default function SimulatorPage() {
       </section>
       <section className="lg:col-span-2 glass-card rounded-xl border border-white/10 p-6">
         <h2 className="text-white font-bold mb-5">Run status</h2>
-        {run ? <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+        {run ? <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <Metric label="Status" value={run.status} />
           <Metric label="Progress" value={`${run.metrics.completedVirtualUsers} / ${run.metrics.totalVirtualUsers}`} />
           <Metric label="Requests" value={String(run.metrics.totalRequests)} />
-          <Metric label="Requests/sec" value={run.metrics.requestsPerSecond.toFixed(1)} />
-          <Metric label="P95 latency" value={`${run.metrics.latency.p95Ms} ms`} />
+          <Metric label="Target requests/sec" value={String(run.metrics.execution?.configuredRequestRate ?? requestRate)} />
+          <Metric label="Actual requests/sec" value={run.metrics.requestsPerSecond.toFixed(1)} />
+          <Metric label="P95 latency" value={formatMilliseconds(run.metrics.latency.p95Ms)} />
           <Metric label="429 responses" value={String(run.metrics.responses.throttled429)} />
           <Metric label="Allocations" value={String(run.metrics.allocation.successful)} />
-        </div> : <p className="text-gray-500">No simulation selected. Configure a bounded virtual-user run to begin.</p>}
+          <Metric label="Timed out users" value={String(run.metrics.execution?.timedOutVirtualUsers ?? 0)} />
+          <Metric label="Cancelled users" value={String(run.metrics.execution?.cancelledVirtualUsers ?? 0)} />
+          <Metric label="Failed workflows" value={String(run.metrics.execution?.failedVirtualUsers ?? 0)} />
+          <Metric label="Peak in-flight" value={String(run.metrics.execution?.peakInFlightRequests ?? 0)} />
+          </div>
+          <p className="mt-5 text-xs text-gray-500">Actual requests/sec is measured from completed simulator actions. A run can end at its configured duration before every virtual-user workflow finishes.</p>
+        </> : <p className="text-gray-500">No simulation selected. Configure a bounded virtual-user run to begin.</p>}
       </section>
     </div>
   </div>;
@@ -146,4 +172,8 @@ function NumberInput({ label, value, min, max, onChange }: { label: string; valu
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border border-white/5 bg-black/30 p-3"><div className="text-xs uppercase text-gray-500">{label}</div><div className="mt-1 font-mono text-white">{value}</div></div>;
+}
+
+function formatMilliseconds(value: number): string {
+  return `${Number.isFinite(value) ? value.toFixed(1) : "0.0"} ms`;
 }

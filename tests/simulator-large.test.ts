@@ -11,4 +11,7 @@ test("5,000 virtual users remain bounded by 500 workers", async () => {
   assert.equal(result.status, "COMPLETED");
   assert.equal(result.metrics.completedVirtualUsers, 5_000);
   assert.ok(peak <= 500);
+  assert.ok(result.metrics.execution.peakInFlightRequests >= peak);
+  assert.ok(result.metrics.execution.peakInFlightRequests <= 500);
+  assert.equal(result.metrics.execution.scheduledRequests, result.metrics.totalRequests);
 });

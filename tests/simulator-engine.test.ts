@@ -19,6 +19,9 @@ test("100 virtual users run with bounded workers and aggregate metrics", async (
   assert.equal(result.metrics.completedVirtualUsers, 100);
   assert.equal(result.metrics.responses.success2xx, result.metrics.totalRequests);
   assert.equal(result.metrics.latency.sampleCount, result.metrics.totalRequests);
+  assert.equal(result.metrics.execution.configuredRequestRate, 2_000);
+  assert.equal(result.metrics.execution.scheduledRequests, result.metrics.totalRequests);
+  assert.ok(result.metrics.execution.peakInFlightRequests <= 100);
 });
 
 test("1,000 virtual users produce deterministic profile assignment and finite execution", async () => {
@@ -44,4 +47,5 @@ test("cancellation terminates a controlled run", async () => {
   });
   assert.equal(result.status, "CANCELLED");
   assert.ok(result.metrics.completedVirtualUsers < 100);
+  assert.equal(result.metrics.execution.cancelledVirtualUsers, 1);
 });

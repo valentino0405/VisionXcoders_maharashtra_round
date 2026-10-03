@@ -275,6 +275,17 @@ export async function getQueueStatusForUser(dropId: string, clerkId: string) {
     queue = toQueueState(durableEntry);
   }
 
-  const totalQueued = await finalizeQueueEntry(queue);
+  // Queue status is read-heavy. The former implementation repaired the Redis
+  // mirror on every poll (HSET + ZADD + ZCARD), which made normal status
+  // polling write traffic. Repair only when the ordering mirror is missing.
+  let totalQueued: number;
+  try {
+    totalQueued = await redis.zcard(queueOrderKey(environment, dropId));
+  } catch {
+    throw new QueueUnavailableError();
+  }
+  if (totalQueued < queue.sequence) {
+    totalQueued = await finalizeQueueEntry(queue);
+  }
   return { queued: true as const, queue, totalQueued };
 }

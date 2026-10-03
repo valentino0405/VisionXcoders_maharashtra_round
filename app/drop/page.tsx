@@ -1,5 +1,5 @@
-import { ShieldCheck, Users, Clock, AlertTriangle, ArrowRight } from "lucide-react";
-import Link from "next/link";
+import { ShieldCheck, Users, Clock, AlertTriangle } from "lucide-react";
+import DropJoinButton from "@/components/drop/DropJoinButton";
 
 export default function DropPage() {
   return (
@@ -42,9 +42,7 @@ export default function DropPage() {
             </div>
           </div>
 
-          <Link href="/queue" className="w-full flex items-center justify-center gap-3 h-16 rounded-xl bg-white text-black font-bold text-xl hover:bg-gray-200 transition-all glow-border">
-            JOIN THE DROP <ArrowRight className="h-6 w-6" />
-          </Link>
+          <DropJoinButton />
           
           <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
             <Clock className="h-4 w-4" /> Drop ends in 02:45:12

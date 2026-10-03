@@ -2,25 +2,73 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, ShieldCheck, Activity, Key } from "lucide-react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 
+type QueueState = {
+  queueEntryId: string;
+  sequence: number;
+  position: number;
+  status: "WAITING" | "ACTIVE";
+  totalQueued: number;
+};
+
 export default function QueuePage() {
-  const [position, setPosition] = useState(12481);
-  
-  // Simulate queue movement
+  const [queue, setQueue] = useState<QueueState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setPosition(prev => Math.max(1, prev - Math.floor(Math.random() * 5)));
-    }, 3000);
-    return () => clearInterval(timer);
+    let cancelled = false;
+
+    async function loadQueue() {
+      try {
+        const joinResponse = await fetch("/api/queue/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dropId: "fairdrop-demo" }),
+        });
+        const joinResult = await joinResponse.json();
+
+        if (!joinResponse.ok) {
+          if (!cancelled) {
+            setError(
+              joinResponse.status === 401
+                ? "Sign in to enter the queue."
+                : joinResult.error === "NOT_A_PARTICIPANT"
+                  ? "Join the drop before entering the queue."
+                  : "Queue state is temporarily unavailable."
+            );
+          }
+          return;
+        }
+
+        const statusResponse = await fetch("/api/queue/status?dropId=fairdrop-demo", {
+          headers: { Authorization: `Bearer ${joinResult.token}` },
+          cache: "no-store",
+        });
+        const statusResult = await statusResponse.json();
+
+        if (!statusResponse.ok || !statusResult.queued) {
+          if (!cancelled) setError("Queue state is temporarily unavailable.");
+          return;
+        }
+
+        if (!cancelled) setQueue(statusResult.queue);
+      } catch {
+        if (!cancelled) setError("Queue state is temporarily unavailable.");
+      }
+    }
+
+    void loadQueue();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 w-full">
       <div className="w-full max-w-2xl text-center mb-8">
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2">YOU'RE IN THE QUEUE.</h1>
-        <p className="text-gray-400">Please do not refresh this page.</p>
+        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-2">YOU&apos;RE IN THE QUEUE.</h1>
+        <p className="text-gray-400">Refreshing will keep your stable queue position.</p>
       </div>
       
       <div className="w-full max-w-2xl glass-card rounded-2xl border border-white/10 p-8 md:p-12 relative overflow-hidden flex flex-col items-center">
@@ -40,11 +88,11 @@ export default function QueuePage() {
 
         <div className="text-gray-400 text-sm font-semibold tracking-widest uppercase mb-4 z-10">Your Position</div>
         <div className="text-7xl font-black text-white font-mono mb-8 glow-text z-10">
-          {position.toLocaleString()}
+          {queue ? queue.position.toLocaleString() : <Loader2 className="h-16 w-16 animate-spin" />}
         </div>
         
         <div className="text-gray-400 text-lg mb-12 z-10">
-          Estimated wait: <span className="text-white font-mono">04:32</span>
+          Queue sequence: <span className="text-white font-mono">{queue?.sequence ?? "--"}</span>
         </div>
 
         <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 z-10">
@@ -54,15 +102,15 @@ export default function QueuePage() {
           </div>
           <div className="bg-black/50 border border-white/5 rounded-lg p-3 text-left">
             <div className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Activity className="h-3 w-3" /> ACTIVITY</div>
-            <div className="text-sm font-medium text-white">Normal</div>
+            <div className="text-sm font-medium text-white">{queue?.status ?? "Loading"}</div>
           </div>
           <div className="bg-black/50 border border-white/5 rounded-lg p-3 text-left">
             <div className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Key className="h-3 w-3" /> TOKEN</div>
-            <div className="text-sm font-medium text-white font-mono">FD-82A91</div>
+            <div className="text-sm font-medium text-white font-mono">{queue ? "SIGNED" : "--"}</div>
           </div>
           <div className="bg-black/50 border border-white/5 rounded-lg p-3 text-left">
             <div className="text-xs text-gray-500 mb-1 flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> FAIRNESS</div>
-            <div className="text-sm font-medium text-violet-400">Protected</div>
+            <div className="text-sm font-medium text-violet-400">FIFO</div>
           </div>
         </div>
 
@@ -71,11 +119,8 @@ export default function QueuePage() {
             <strong>Note:</strong> Refreshing will not improve your position. Repeated requests do not increase allocation priority.
           </p>
         </div>
-        
-        {/* Temporary mock link to ticket page for flow */}
-        <Link href="/ticket" className="mt-8 text-xs text-gray-600 hover:text-white underline z-10">
-          [Mock: Skip to Ticket]
-        </Link>
+
+        {error ? <p role="alert" className="mt-6 text-sm text-red-300 z-10">{error}</p> : null}
       </div>
     </div>
   );

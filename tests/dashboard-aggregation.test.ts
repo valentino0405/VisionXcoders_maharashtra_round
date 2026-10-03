@@ -5,6 +5,7 @@ import { emptySimulationMetrics } from "../lib/simulator/simulator-metrics.ts";
 
 test("dashboard has truthful empty state without fabricated values", () => {
   const dashboard = aggregateDashboard(null, null);
+  assert.equal(dashboard.hasData, false);
   assert.equal(dashboard.active, false);
   assert.equal(dashboard.operations.activeVirtualUsers, 0);
   assert.equal(dashboard.latestExperiment, null);
@@ -21,6 +22,7 @@ test("dashboard aggregates active real run metrics", () => {
   metrics.abuse.throttled = 12; metrics.abuse.blocked = 3; metrics.latency.p95Ms = 15; metrics.latency.p99Ms = 20;
   const dashboard = aggregateDashboard({ simulationRunId: "sim_1", status: "RUNNING", scenario: "MIXED_ATTACK", configuration: { virtualUsers: 100 }, metrics }, null);
   assert.equal(dashboard.active, true);
+  assert.equal(dashboard.hasData, true);
   assert.equal(dashboard.operations.queueDepth, 60);
   assert.equal(dashboard.operations.seatsRemaining, 480);
   assert.equal(dashboard.fairness.normalizedQueuePosition, 0.5);

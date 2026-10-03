@@ -132,7 +132,7 @@ export default function SimulatorPage() {
           <Metric label="P95 latency" value={`${run.metrics.latency.p95Ms} ms`} />
           <Metric label="429 responses" value={String(run.metrics.responses.throttled429)} />
           <Metric label="Allocations" value={String(run.metrics.allocation.successful)} />
-        </div> : <p className="text-gray-500">No active simulation.</p>}
+        </div> : <p className="text-gray-500">No simulation selected. Configure a bounded virtual-user run to begin.</p>}
       </section>
     </div>
   </div>;

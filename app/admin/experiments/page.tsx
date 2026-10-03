@@ -21,14 +21,15 @@ export default function ExperimentsPage() {
   const [distribution, setDistribution] = useState("");
   const [experiment, setExperiment] = useState<Experiment | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [initialState, setInitialState] = useState<"loading" | "empty" | "error" | "ready">("loading");
   const active = experiment ? activeStatuses.has(experiment.status) : false;
 
   useEffect(() => {
     void fetch("/api/admin/experiments", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) return;
+      if (!response.ok) { setInitialState("error"); return; }
       const latest = (await response.json()).experiments?.[0] as Experiment | undefined;
-      if (latest) setExperiment(latest);
-    });
+      if (latest) { setExperiment(latest); setInitialState("ready"); } else setInitialState("empty");
+    }).catch(() => setInitialState("error"));
   }, []);
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function ExperimentsPage() {
         {error ? <p className="text-red-300 text-sm">{error}</p> : null}
       </section>
       <section className="lg:col-span-2 space-y-6">
-        <div className="glass-card rounded-xl border border-white/10 p-6"><h2 className="font-bold text-white mb-4">Run status</h2>{experiment ? <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Metric label="Experiment" value={experiment.status} /><Metric label="Progress" value={current ? `${current.completedVirtualUsers}/${current.totalVirtualUsers}` : "0"} /><Metric label="Requests" value={format(current?.totalRequests)} /><Metric label="RPS" value={format(current?.requestsPerSecond)} /><Metric label="P95 / P99" value={current ? `${current.latency.p95Ms.toFixed(1)} / ${current.latency.p99Ms.toFixed(1)} ms` : "—"} /><Metric label="Errors" value={current ? String(current.errors.timeouts + current.errors.connection + current.errors.unexpected) : "—"} /><Metric label="Allocations" value={format(current?.allocation.successful)} /></div> : <p className="text-gray-500">No experiment selected.</p>}</div>
+        <div className="glass-card rounded-xl border border-white/10 p-6"><h2 className="font-bold text-white mb-4">Run status</h2>{experiment ? <div className="grid grid-cols-2 md:grid-cols-4 gap-3"><Metric label="Experiment" value={experiment.status} /><Metric label="Progress" value={current ? `${current.completedVirtualUsers}/${current.totalVirtualUsers}` : "0"} /><Metric label="Requests" value={format(current?.totalRequests)} /><Metric label="RPS" value={format(current?.requestsPerSecond)} /><Metric label="P95 / P99" value={current ? `${current.latency.p95Ms.toFixed(1)} / ${current.latency.p99Ms.toFixed(1)} ms` : "—"} /><Metric label="Errors" value={current ? String(current.errors.timeouts + current.errors.connection + current.errors.unexpected) : "—"} /><Metric label="Allocations" value={format(current?.allocation.successful)} /></div> : initialState === "loading" ? <p className="text-gray-400">Loading experiments…</p> : initialState === "error" ? <p className="text-red-300">Unable to load experiments. Try again.</p> : <p className="text-gray-500">No experiment data yet. Configure a controlled run to create a comparison.</p>}</div>
         {experiment?.comparison ? <ComparisonTable comparison={experiment.comparison} /> : null}
       </section>
     </div>

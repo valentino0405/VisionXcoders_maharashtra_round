@@ -9,6 +9,7 @@ export const ABUSE_POLICY = {
     DROP_JOIN: { windowSeconds: 60, limit: 5 },
     QUEUE_JOIN: { windowSeconds: 60, limit: 5 },
     QUEUE_STATUS: { windowSeconds: 60, limit: 60 },
+    ALLOCATION_CLAIM: { windowSeconds: 60, limit: 5 },
   },
   events: {
     duplicateJoin: { suspicious: 4, throttle: 10, block: 25 },

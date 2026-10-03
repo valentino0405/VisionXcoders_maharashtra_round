@@ -14,7 +14,9 @@
     "test:queue:integration": "node scripts/verify-queue-concurrency.mjs",
     "test:abuse": "node --conditions=react-server --experimental-strip-types --test tests/abuse-engine.test.ts",
     "test:abuse:integration": "node --conditions=react-server --experimental-strip-types scripts/verify-abuse-concurrency.mjs",
-    "test:fairness": "node --experimental-strip-types --test tests/fairness-engine.test.ts"
+    "test:fairness": "node --experimental-strip-types --test tests/fairness-engine.test.ts",
+    "test:allocation": "node --experimental-strip-types --test tests/allocation-engine.test.ts",
+    "test:allocation:integration": "node scripts/verify-allocation-concurrency.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

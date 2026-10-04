@@ -60,8 +60,21 @@ export async function cleanupSimulation(dropId: string, users: VirtualUser[], st
     const sessionId = states.get(user.index)?.sessionId;
     if (sessionId) keys.push(sessionRedisKey(environment, sessionId));
   });
-  for (let index = 0; index < keys.length; index += 500) await redis.del(...keys.slice(index, index + 500));
+  let redisCleanupError: unknown = null;
+  for (let index = 0; index < keys.length; index += 500) {
+    try {
+      await redis.del(...keys.slice(index, index + 500));
+    } catch (error) {
+      // Continue with durable cleanup below. An exhausted Redis quota must not
+      // leave the isolated MongoDB drop and its allocations behind.
+      redisCleanupError = error;
+      break;
+    }
+  }
   await Promise.all([Allocation.deleteMany({ dropId }), QueueEntry.deleteMany({ dropId }), Participation.deleteMany({ dropId }), Drop.deleteOne({ dropId })]);
+  if (redisCleanupError) {
+    throw new Error("Simulator Redis cleanup failed after durable cleanup");
+  }
 }
 
 async function action(user: VirtualUser, requested: SimulationAction, dropId: string, states: Map<number, UserState>): Promise<SimulationActionResult> {

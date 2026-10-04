@@ -145,7 +145,7 @@ async function persistQueueEntry(input: QueueState & { clerkId: string }) {
       },
       {
         includeResultMetadata: true,
-        new: true,
+        returnDocument: "after",
         runValidators: true,
         setDefaultsOnInsert: true,
         upsert: true,
@@ -180,16 +180,21 @@ export async function finalizeQueueEntry(queue: QueueState): Promise<number> {
   const redis = getRedisClient();
 
   try {
-    await redis
+    const results = await redis
       .multi()
       .hset(queueEntryKey(environment, queue.dropId, queue.participantId), queue)
       .zadd(queueOrderKey(environment, queue.dropId), {
         score: queue.sequence,
         member: queue.participantId,
       })
+      .zcard(queueOrderKey(environment, queue.dropId))
       .exec();
 
-    return await redis.zcard(queueOrderKey(environment, queue.dropId));
+    const totalQueued = Number(results.at(-1));
+    if (!Number.isSafeInteger(totalQueued) || totalQueued < 1) {
+      throw new QueueUnavailableError();
+    }
+    return totalQueued;
   } catch {
     throw new QueueUnavailableError();
   }

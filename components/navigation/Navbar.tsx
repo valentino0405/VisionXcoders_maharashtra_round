@@ -62,6 +62,7 @@ export function Navbar() {
               >
                 <Users className="h-4 w-4" /> Drop Window
               </Link>
+              <Link href="/live-demo" className={`transition-colors ${pathname === "/live-demo" ? "text-cyan-400 font-semibold" : "text-gray-400 hover:text-white"}`}>Live Demo</Link>
               <Link 
                 href="/admin" 
                 className={`transition-colors flex items-center gap-1.5 ${

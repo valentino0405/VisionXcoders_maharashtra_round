@@ -17,7 +17,7 @@ async function upsertParticipation(input: { dropId: string; clerkId: string; par
   const filter = { dropId: input.dropId, clerkId: input.clerkId };
   try {
     const result = await Participation.findOneAndUpdate(filter, { $setOnInsert: { participantId: input.participantId, joinedAt: input.joinedAt, status: "JOINED" } }, {
-      includeResultMetadata: true, new: true, runValidators: true, setDefaultsOnInsert: true, upsert: true,
+      includeResultMetadata: true, returnDocument: "after", runValidators: true, setDefaultsOnInsert: true, upsert: true,
     });
     if (!result.value) throw new Error("Participation upsert returned no document");
     return { participant: participantState(result.value), created: result.lastErrorObject?.updatedExisting === false };

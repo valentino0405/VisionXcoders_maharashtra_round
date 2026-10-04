@@ -10,6 +10,8 @@ Each production-style run creates a unique temporary `fairdrop-sim-{run}` drop w
 
 `virtualUsers` supports 1–50,000. Development safety limits are: 500 workers, 300 seconds, 2,000 requests/sec, burst size 100, and jitter up to 10 seconds. Invalid requests are rejected with `SIMULATION_LIMIT_EXCEEDED`; simulations are always finite. The default admin form starts at 100 users rather than a destructive maximum.
 
+The MongoDB driver pool defaults to a maximum of 500 connections so a bounded 500-worker simulation is not held behind the driver's default 100-connection wait queue. It opens connections only as demand requires. Set `FAIRDROP_MONGODB_MAX_POOL_SIZE` to an integer from 1 to 500 when an environment has a lower Atlas connection budget.
+
 A seed deterministically assigns virtual-user profiles and jitter decisions. Reproducibility applies to the simulator schedule and profile assignment; real Redis/Mongo latency and Phase 4 timing can still vary.
 
 ## Scenarios
@@ -38,7 +40,10 @@ All endpoints require Clerk authentication plus a fail-closed `FAIRDROP_ADMIN_CL
 ```text
 npm run test:simulator        # 100 and 1,000 virtual-user scenarios
 npm run test:simulator:large  # controlled 5,000 virtual-user scenario
+npm run test:simulator:live -- --users=100 --duration=60 --concurrency=100 --rate=250
 ```
+
+`test:simulator:live` is an opt-in real MongoDB/Upstash verification command. It uses a unique isolated drop, asserts queue/allocation integrity, and cleans all simulator resources before it returns.
 
 For manual isolated workloads, open `/admin/simulator`, select the intended scenario, and enter 100, 1,000, 10,000, 25,000, or 50,000 virtual users. Start at 100 and increase concurrency/request rate only after observing Redis, MongoDB, and host capacity. 50,000 virtual users are configurable, but should be run only in a controlled environment with appropriate Redis/Mongo capacity.
 

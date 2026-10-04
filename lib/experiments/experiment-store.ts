@@ -8,7 +8,7 @@ export async function createExperiment(input: { experimentId: string; name: stri
   return Experiment.create({ ...input, status: "CREATED", baselineMetrics: null, fairDropMetrics: null, comparison: null, startedAt: null, completedAt: null, error: null });
 }
 export async function updateExperiment(experimentId: string, update: { status?: ExperimentStatus; baselineMetrics?: SimulationMetrics | null; fairDropMetrics?: SimulationMetrics | null; comparison?: ExperimentComparison | null; startedAt?: Date | null; completedAt?: Date | null; error?: string | null }) {
-  return Experiment.findOneAndUpdate({ experimentId }, { $set: update }, { new: true }).lean();
+  return Experiment.findOneAndUpdate({ experimentId }, { $set: update }, { returnDocument: "after" }).lean();
 }
 export async function getExperiment(experimentId: string) { return Experiment.findOne({ experimentId }).lean(); }
 export async function listExperiments(limit = 20) { return Experiment.find().sort({ createdAt: -1 }).limit(Math.min(100, Math.max(1, limit))).lean(); }

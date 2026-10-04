@@ -28,9 +28,9 @@ function runId() { return `sim_${new Date().toISOString().replace(/[-:.TZ]/g, ""
 function simulationDropId(id: string) { return `fairdrop-sim-${id.toLowerCase().replaceAll("_", "-").slice(-40)}`; }
 function denied(decision: { classification: string }) { return decision.classification === "THROTTLED" ? 429 : decision.classification === "BLOCKED" ? 403 : 0; }
 
-async function ensureSimulationDrop(dropId: string) {
+async function ensureSimulationDrop(dropId: string, capacity = 500) {
   const now = new Date();
-  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity: 500, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, new: true });
+  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, returnDocument: "after" });
 }
 
 export async function cleanupSimulation(dropId: string, users: VirtualUser[], states: Map<number, UserState>) {
@@ -60,52 +60,67 @@ export async function cleanupSimulation(dropId: string, users: VirtualUser[], st
     const sessionId = states.get(user.index)?.sessionId;
     if (sessionId) keys.push(sessionRedisKey(environment, sessionId));
   });
-  for (let index = 0; index < keys.length; index += 500) await redis.del(...keys.slice(index, index + 500));
+  let redisCleanupError: unknown = null;
+  for (let index = 0; index < keys.length; index += 500) {
+    try {
+      await redis.del(...keys.slice(index, index + 500));
+    } catch (error) {
+      // Continue with durable cleanup below. An exhausted Redis quota must not
+      // leave the isolated MongoDB drop and its allocations behind.
+      redisCleanupError = error;
+      break;
+    }
+  }
   await Promise.all([Allocation.deleteMany({ dropId }), QueueEntry.deleteMany({ dropId }), Participation.deleteMany({ dropId }), Drop.deleteOne({ dropId })]);
+  if (redisCleanupError) {
+    throw new Error("Simulator Redis cleanup failed after durable cleanup");
+  }
 }
 
 async function action(user: VirtualUser, requested: SimulationAction, dropId: string, states: Map<number, UserState>): Promise<SimulationActionResult> {
   const started = performance.now();
   const decision = await evaluateAbuseRequest({ clerkId: user.clerkId, action: requested === "SESSION_RECOVERY" ? "SESSION_RECOVERY" : requested === "ALLOCATION_CLAIM" ? "ALLOCATION_CLAIM" : requested === "DROP_JOIN" ? "DROP_JOIN" : requested === "QUEUE_JOIN" ? "QUEUE_JOIN" : "QUEUE_STATUS", endpoint: `sim:${requested}`, dropId });
+  const abuseCompletedAt = performance.now();
+  const timing = () => ({ abuseMs: abuseCompletedAt - started, fairDropServiceMs: performance.now() - abuseCompletedAt });
   const blocked = denied(decision);
-  if (blocked) return { endpoint: requested, statusCode: blocked, latencyMs: performance.now() - started };
+  if (blocked) return { endpoint: requested, statusCode: blocked, latencyMs: performance.now() - started, timing: timing() };
   try {
     if (requested === "DROP_JOIN") {
       const result = await joinDropForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "DROP_JOIN", event: "DUPLICATE_DROP_JOIN", endpoint: "sim:drop", dropId });
-      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.participant.participantId, latencyMs: performance.now() - started };
+      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.participant.participantId, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "QUEUE_JOIN") {
       const result = await enterQueueForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "QUEUE_JOIN", event: "DUPLICATE_QUEUE_JOIN", endpoint: "sim:queue", dropId });
       states.set(user.index, { ...states.get(user.index), token: issueQueueToken(result.queue, getQueueTokenSecret()) });
-      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.queue.participantId, queuePosition: result.queue.position, queueSize: result.totalQueued, latencyMs: performance.now() - started };
+      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.queue.participantId, queuePosition: result.queue.position, queueSize: result.totalQueued, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "QUEUE_STATUS") {
       const result = await getQueueStatusForUser(dropId, user.clerkId);
-      return { endpoint: "/api/queue/status", statusCode: "error" in result ? 409 : 200, latencyMs: performance.now() - started };
+      return { endpoint: "/api/queue/status", statusCode: "error" in result ? 409 : 200, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "SESSION_RECOVERY") {
       const result = await recoverSessionForUser(user.clerkId, states.get(user.index)?.sessionId);
       states.set(user.index, { ...states.get(user.index), sessionId: result.session.sessionId });
-      return { endpoint: "/api/session", statusCode: 200, latencyMs: performance.now() - started };
+      return { endpoint: "/api/session", statusCode: 200, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "ALLOCATION_CLAIM") {
       const result = await claimAllocationForUser(dropId, user.clerkId);
-      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.allocation.participantId, seatId: result.allocation.seatId, latencyMs: performance.now() - started };
+      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.allocation.participantId, seatId: result.allocation.seatId, latencyMs: performance.now() - started, timing: timing() };
     }
     const token = states.get(user.index)?.token ?? "malformed";
     const verification = verifyQueueTokenDetailed(token, { dropId, participantId: "wrong-participant", queueEntryId: "wrong-entry" }, getQueueTokenSecret());
     const event = verification.valid ? "INVALID_QUEUE_TOKEN" : verification.reason === "CROSS_DROP" ? "CROSS_DROP_TOKEN" : verification.reason === "CROSS_PARTICIPANT" || verification.reason === "CROSS_QUEUE_ENTRY" ? "CROSS_PARTICIPANT_TOKEN" : "INVALID_QUEUE_TOKEN";
     const post = await recordAbuseEvent({ clerkId: user.clerkId, action: "QUEUE_STATUS", event, endpoint: "sim:token", dropId });
-    return { endpoint: "/api/queue/status", statusCode: denied(post) || 401, invalidToken: true, ownershipFailure: event !== "INVALID_QUEUE_TOKEN", latencyMs: performance.now() - started };
+    return { endpoint: "/api/queue/status", statusCode: denied(post) || 401, invalidToken: true, ownershipFailure: event !== "INVALID_QUEUE_TOKEN", latencyMs: performance.now() - started, timing: timing() };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    return { endpoint: requested, statusCode: 500, latencyMs: performance.now() - started, connectionError: /unavailable|connect/i.test(message) };
+    return { endpoint: requested, statusCode: 500, latencyMs: performance.now() - started, connectionError: /unavailable|connect/i.test(message), timing: timing() };
   }
 }
 
-async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean } }) {
+async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean }; retainResources?: boolean; capacity?: number }) {
   try {
     if (run.control.cancelled) {
       await updateSimulationRun(run.simulationRunId, { status: "CANCELLED", completedAt: new Date() });
@@ -114,7 +129,7 @@ async function execute(run: { simulationRunId: string; dropId: string; config: S
     await updateSimulationRun(run.simulationRunId, { status: "RUNNING", startedAt: new Date() });
     const result = await runFairDropSimulation(run.simulationRunId, run.dropId, run.config, run.control, async (metrics) => {
       await updateSimulationRun(run.simulationRunId, { status: run.control.cancelled ? "STOPPING" : "RUNNING", metrics });
-    });
+    }, run.retainResources, run.capacity);
     await completeSimulationRun(result);
   } catch (error) {
     await updateSimulationRun(run.simulationRunId, { status: "FAILED", completedAt: new Date(), errorSummary: error instanceof Error ? error.message.slice(0, 500) : "Unexpected simulator failure" });
@@ -129,34 +144,75 @@ export async function runFairDropSimulation(
   dropId: string,
   config: SimulationConfig,
   control: { cancelled: boolean },
-  onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void
+  onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void,
+  retainResources = false,
+  capacity = 500
 ) {
   const users = new Map<number, VirtualUser>();
   const states = new Map<number, UserState>();
   try {
     await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
-    await ensureSimulationDrop(dropId);
+    await ensureSimulationDrop(dropId, capacity);
     return await runSimulation(simulationRunId, dropId, config, {
       executeAction: async (user, requested) => { users.set(user.index, user); return action(user, requested, dropId, states); },
       isCancelled: () => control.cancelled,
       onProgress,
     });
   } finally {
-    await cleanupSimulation(dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
+    if (!retainResources) await cleanupSimulation(dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
   }
 }
 
 export async function startSimulation(config: SimulationConfig) {
+  return startSimulationInternal(config);
+}
+
+async function startSimulationInternal(config: SimulationConfig, ownerClerkId?: string, retainResources = false) {
   const resolved = validateSimulationConfig(config);
   await connectToDatabase();
   const simulationRunId = runId();
   const dropId = simulationDropId(simulationRunId);
   const control = { cancelled: false };
   activeRuns.set(simulationRunId, control);
-  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved) });
+  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved), ownerClerkId: ownerClerkId ?? null });
   await updateSimulationRun(simulationRunId, { status: "STARTING" });
-  void execute({ simulationRunId, dropId, config: resolved, control });
+  void execute({ simulationRunId, dropId, config: resolved, control, retainResources });
   return { simulationRunId, dropId, status: "STARTING" as SimulationRunStatus };
+}
+
+/** Restricted live-demo entry point. It shares the exact simulator and FairDrop services,
+ * while retaining its isolated drop long enough for the authenticated judge to inspect it. */
+export async function startLiveDemoSimulation(config: SimulationConfig, ownerClerkId: string, capacity = 500, preloadedAllocated = 0) {
+  const resolved = validateSimulationConfig(config);
+  if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 5_000 || !Number.isSafeInteger(preloadedAllocated) || preloadedAllocated < 0 || preloadedAllocated > capacity) throw new Error("Invalid live scenario configuration");
+  await connectToDatabase();
+  const simulationRunId = runId();
+  const dropId = `fairdrop-live-demo-${simulationRunId.toLowerCase().replaceAll("_", "-").slice(-40)}`;
+  const control = { cancelled: false };
+  activeRuns.set(simulationRunId, control);
+  await ensureSimulationDrop(dropId, capacity);
+  await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
+  for (let index = 0; index < preloadedAllocated; index += 1) {
+    const clerkId = `scenario-preload-${simulationRunId}-${index.toString().padStart(4, "0")}`;
+    await joinDropForUser(dropId, clerkId);
+    await enterQueueForUser(dropId, clerkId);
+    await claimAllocationForUser(dropId, clerkId);
+  }
+  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: { ...resolved, liveScenario: { capacity, preloadedAllocated } }, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved), ownerClerkId });
+  await updateSimulationRun(simulationRunId, { status: "STARTING" });
+  void execute({ simulationRunId, dropId, config: resolved, control, retainResources: true, capacity });
+  return { simulationRunId, dropId, status: "STARTING" as SimulationRunStatus };
+}
+
+export async function resetLiveDemoSimulation(simulationRunId: string, ownerClerkId: string) {
+  await connectToDatabase();
+  const run = await (await import("@/models/SimulationRun")).default.findOne({ simulationRunId, ownerClerkId }).lean();
+  if (!run) return false;
+  if (activeRuns.has(simulationRunId)) return false;
+  const participations = await Participation.find({ dropId: run.dropId }).lean();
+  await cleanupSimulation(run.dropId, participations.map((participant, index) => ({ index, virtualUserId: participant.participantId, clerkId: participant.clerkId, profile: "NORMAL_TRAFFIC", seed: index })), new Map());
+  await updateSimulationRun(simulationRunId, { status: "CANCELLED", completedAt: new Date() });
+  return true;
 }
 export async function stopSimulation(simulationRunId: string) {
   const control = activeRuns.get(simulationRunId);

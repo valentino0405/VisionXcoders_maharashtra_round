@@ -20,9 +20,11 @@
     "test:session": "node --experimental-strip-types --test tests/session-engine.test.ts",
     "test:simulator": "node --experimental-strip-types --test tests/simulator-engine.test.ts",
     "test:simulator:large": "node --experimental-strip-types --test tests/simulator-large.test.ts",
+    "test:simulator:live": "node --conditions=react-server --experimental-strip-types --import ./scripts/register-aliases.mjs scripts/verify-simulator-live.ts",
     "test:experiments": "node --experimental-strip-types --test tests/experiment-engine.test.ts",
     "test:dashboard": "node --experimental-strip-types --test tests/dashboard-aggregation.test.ts",
     "test:reports": "node --experimental-strip-types --test tests/report-engine.test.ts"
+    ,"test:live-demo": "node --experimental-strip-types --test tests/live-demo-scenarios.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

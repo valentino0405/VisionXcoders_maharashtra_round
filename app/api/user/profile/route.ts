@@ -33,30 +33,32 @@ export async function GET() {
       clerkUser.emailAddresses[0]?.emailAddress ||
       "";
 
-    // Find or initialize MongoDB User
-    let dbUser = await User.findOne({ clerkId: userId });
-    if (!dbUser) {
-      dbUser = await User.create({
-        clerkId: userId,
-        email: primaryEmail,
-        firstName: clerkUser.firstName || "",
-        lastName: clerkUser.lastName || "",
-        imageUrl: clerkUser.imageUrl || "",
-      });
-    } else {
-      // Sync basic details from Clerk if empty in MongoDB
-      let changed = false;
-      if (!dbUser.email && primaryEmail) {
-        dbUser.email = primaryEmail;
-        changed = true;
-      }
-      if (!dbUser.imageUrl && clerkUser.imageUrl) {
-        dbUser.imageUrl = clerkUser.imageUrl;
-        changed = true;
-      }
-      if (changed) {
-        await dbUser.save();
-      }
+    // Atomically find or initialize MongoDB User
+    const dbUser = await User.findOneAndUpdate(
+      { clerkId: userId },
+      {
+        $setOnInsert: {
+          clerkId: userId,
+          email: primaryEmail,
+          firstName: clerkUser.firstName || "",
+          lastName: clerkUser.lastName || "",
+          imageUrl: clerkUser.imageUrl || "",
+        },
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+
+    // Sync basic details from Clerk if empty in MongoDB
+    if ((!dbUser.email && primaryEmail) || (!dbUser.imageUrl && clerkUser.imageUrl)) {
+      await User.updateOne(
+        { clerkId: userId },
+        {
+          $set: {
+            ...(primaryEmail && !dbUser.email ? { email: primaryEmail } : {}),
+            ...(clerkUser.imageUrl && !dbUser.imageUrl ? { imageUrl: clerkUser.imageUrl } : {}),
+          },
+        }
+      );
     }
 
     // Query user's FairDrop activity

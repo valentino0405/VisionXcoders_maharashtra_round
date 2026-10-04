@@ -22,6 +22,7 @@ export function emptySimulationMetrics(
       lateScheduleCount: 0,
       scheduleDelayMs: 0,
       actionLatency: {},
+      serviceTiming: { abuseMs: 0, fairDropServiceMs: 0 },
     },
     requestsByEndpoint: {}, requestsByProfile: {},
     responses: { success2xx: 0, client4xx: 0, throttled429: 0, server5xx: 0 },
@@ -43,6 +44,8 @@ export function recordSimulationAction(
   latencies: number[]
 ): void {
   metrics.totalRequests += 1;
+  metrics.execution.serviceTiming.abuseMs += result.timing?.abuseMs ?? 0;
+  metrics.execution.serviceTiming.fairDropServiceMs += result.timing?.fairDropServiceMs ?? 0;
   const actionLatency = metrics.execution.actionLatency[action] ?? { count: 0, totalMs: 0, maxMs: 0 };
   actionLatency.count += 1;
   actionLatency.totalMs += result.latencyMs;

@@ -57,6 +57,7 @@ export type SimulationMetrics = {
     lateScheduleCount: number;
     scheduleDelayMs: number;
     actionLatency: Record<string, { count: number; totalMs: number; maxMs: number }>;
+    serviceTiming: { abuseMs: number; fairDropServiceMs: number };
   };
   totalRequests: number;
   requestsPerSecond: number;
@@ -92,6 +93,7 @@ export type SimulationActionResult = {
   ownershipFailure?: boolean;
   timeout?: boolean;
   connectionError?: boolean;
+  timing?: { abuseMs: number; fairDropServiceMs: number };
   participantId?: string;
   seatId?: string;
   queuePosition?: number;

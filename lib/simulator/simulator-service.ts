@@ -67,41 +67,43 @@ export async function cleanupSimulation(dropId: string, users: VirtualUser[], st
 async function action(user: VirtualUser, requested: SimulationAction, dropId: string, states: Map<number, UserState>): Promise<SimulationActionResult> {
   const started = performance.now();
   const decision = await evaluateAbuseRequest({ clerkId: user.clerkId, action: requested === "SESSION_RECOVERY" ? "SESSION_RECOVERY" : requested === "ALLOCATION_CLAIM" ? "ALLOCATION_CLAIM" : requested === "DROP_JOIN" ? "DROP_JOIN" : requested === "QUEUE_JOIN" ? "QUEUE_JOIN" : "QUEUE_STATUS", endpoint: `sim:${requested}`, dropId });
+  const abuseCompletedAt = performance.now();
+  const timing = () => ({ abuseMs: abuseCompletedAt - started, fairDropServiceMs: performance.now() - abuseCompletedAt });
   const blocked = denied(decision);
-  if (blocked) return { endpoint: requested, statusCode: blocked, latencyMs: performance.now() - started };
+  if (blocked) return { endpoint: requested, statusCode: blocked, latencyMs: performance.now() - started, timing: timing() };
   try {
     if (requested === "DROP_JOIN") {
       const result = await joinDropForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "DROP_JOIN", event: "DUPLICATE_DROP_JOIN", endpoint: "sim:drop", dropId });
-      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.participant.participantId, latencyMs: performance.now() - started };
+      return { endpoint: "/api/drop/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.participant.participantId, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "QUEUE_JOIN") {
       const result = await enterQueueForUser(dropId, user.clerkId);
       if (!result.created) await recordAbuseEvent({ clerkId: user.clerkId, action: "QUEUE_JOIN", event: "DUPLICATE_QUEUE_JOIN", endpoint: "sim:queue", dropId });
       states.set(user.index, { ...states.get(user.index), token: issueQueueToken(result.queue, getQueueTokenSecret()) });
-      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.queue.participantId, queuePosition: result.queue.position, queueSize: result.totalQueued, latencyMs: performance.now() - started };
+      return { endpoint: "/api/queue/join", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.queue.participantId, queuePosition: result.queue.position, queueSize: result.totalQueued, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "QUEUE_STATUS") {
       const result = await getQueueStatusForUser(dropId, user.clerkId);
-      return { endpoint: "/api/queue/status", statusCode: "error" in result ? 409 : 200, latencyMs: performance.now() - started };
+      return { endpoint: "/api/queue/status", statusCode: "error" in result ? 409 : 200, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "SESSION_RECOVERY") {
       const result = await recoverSessionForUser(user.clerkId, states.get(user.index)?.sessionId);
       states.set(user.index, { ...states.get(user.index), sessionId: result.session.sessionId });
-      return { endpoint: "/api/session", statusCode: 200, latencyMs: performance.now() - started };
+      return { endpoint: "/api/session", statusCode: 200, latencyMs: performance.now() - started, timing: timing() };
     }
     if (requested === "ALLOCATION_CLAIM") {
       const result = await claimAllocationForUser(dropId, user.clerkId);
-      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.allocation.participantId, seatId: result.allocation.seatId, latencyMs: performance.now() - started };
+      return { endpoint: "/api/allocation/claim", statusCode: result.created ? 201 : 200, duplicate: !result.created, participantId: result.allocation.participantId, seatId: result.allocation.seatId, latencyMs: performance.now() - started, timing: timing() };
     }
     const token = states.get(user.index)?.token ?? "malformed";
     const verification = verifyQueueTokenDetailed(token, { dropId, participantId: "wrong-participant", queueEntryId: "wrong-entry" }, getQueueTokenSecret());
     const event = verification.valid ? "INVALID_QUEUE_TOKEN" : verification.reason === "CROSS_DROP" ? "CROSS_DROP_TOKEN" : verification.reason === "CROSS_PARTICIPANT" || verification.reason === "CROSS_QUEUE_ENTRY" ? "CROSS_PARTICIPANT_TOKEN" : "INVALID_QUEUE_TOKEN";
     const post = await recordAbuseEvent({ clerkId: user.clerkId, action: "QUEUE_STATUS", event, endpoint: "sim:token", dropId });
-    return { endpoint: "/api/queue/status", statusCode: denied(post) || 401, invalidToken: true, ownershipFailure: event !== "INVALID_QUEUE_TOKEN", latencyMs: performance.now() - started };
+    return { endpoint: "/api/queue/status", statusCode: denied(post) || 401, invalidToken: true, ownershipFailure: event !== "INVALID_QUEUE_TOKEN", latencyMs: performance.now() - started, timing: timing() };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    return { endpoint: requested, statusCode: 500, latencyMs: performance.now() - started, connectionError: /unavailable|connect/i.test(message) };
+    return { endpoint: requested, statusCode: 500, latencyMs: performance.now() - started, connectionError: /unavailable|connect/i.test(message), timing: timing() };
   }
 }
 

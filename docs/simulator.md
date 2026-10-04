@@ -38,7 +38,10 @@ All endpoints require Clerk authentication plus a fail-closed `FAIRDROP_ADMIN_CL
 ```text
 npm run test:simulator        # 100 and 1,000 virtual-user scenarios
 npm run test:simulator:large  # controlled 5,000 virtual-user scenario
+npm run test:simulator:live -- --users=100 --duration=60 --concurrency=100 --rate=250
 ```
+
+`test:simulator:live` is an opt-in real MongoDB/Upstash verification command. It uses a unique isolated drop, asserts queue/allocation integrity, and cleans all simulator resources before it returns.
 
 For manual isolated workloads, open `/admin/simulator`, select the intended scenario, and enter 100, 1,000, 10,000, 25,000, or 50,000 virtual users. Start at 100 and increase concurrency/request rate only after observing Redis, MongoDB, and host capacity. 50,000 virtual users are configurable, but should be run only in a controlled environment with appropriate Redis/Mongo capacity.
 

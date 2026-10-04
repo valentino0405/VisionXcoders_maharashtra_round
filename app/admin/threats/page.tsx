@@ -1,94 +1,23 @@
-import { ShieldAlert, Activity, AlertTriangle, Shield, CheckCircle2 } from "lucide-react";
+"use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Activity, AlertTriangle, ArrowUpRight, Ban, ShieldAlert, ShieldCheck } from "lucide-react";
+
+type Dashboard = { hasData: boolean; active: boolean; operations: { suspiciousTraffic: number; throttledRequests: number; blockedRequests: number } };
 export default function ThreatsPage() {
-  const events = [
-    { time: "18:45:12", src: "192.168.1.x", behavior: "Request Flooding", severity: "High", action: "IP Banned", status: "Resolved" },
-    { time: "18:45:10", src: "10.0.0.x", behavior: "Token Replay", severity: "Critical", action: "Session Revoked", status: "Resolved" },
-    { time: "18:44:59", src: "Multiple", behavior: "Bot Swarm", severity: "High", action: "Rate Limited", status: "Active" },
-    { time: "18:44:12", src: "172.16.x.x", behavior: "Duplicate Attempts", severity: "Medium", action: "Queue Position Dropped", status: "Resolved" },
-    { time: "18:43:55", src: "192.168.1.x", behavior: "Queue Manipulation", severity: "Critical", action: "Blacklisted", status: "Resolved" },
-  ];
-
-  return (
-    <div className="p-6 md:p-8 w-full max-w-7xl mx-auto">
-      <div className="mb-8 flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-            <ShieldAlert className="h-8 w-8 text-red-500" />
-            Threats & Abuse
-          </h1>
-          <p className="text-gray-400">Live monitoring of adversarial traffic and mitigation actions.</p>
-        </div>
-        <div className="px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 font-bold flex items-center gap-2">
-          <Shield className="h-4 w-4" /> THREAT LEVEL: NORMAL
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-red-400" /> Automated Traffic
-          </div>
-          <div className="text-4xl font-bold text-white font-mono">10,482</div>
-        </div>
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-orange-400" /> Rate-Limited
-          </div>
-          <div className="text-4xl font-bold text-white font-mono">7,294</div>
-        </div>
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-            <ShieldAlert className="h-4 w-4 text-red-500" /> Blocked Requests
-          </div>
-          <div className="text-4xl font-bold text-red-400 font-mono">18,231</div>
-        </div>
-      </div>
-
-      <div className="glass-card rounded-xl border border-white/10 overflow-hidden">
-        <div className="p-6 border-b border-white/10 bg-white/5">
-          <h3 className="font-bold text-white">Live Event Log</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-black/50 text-gray-400">
-              <tr>
-                <th className="p-4 font-semibold">Timestamp</th>
-                <th className="p-4 font-semibold">Source</th>
-                <th className="p-4 font-semibold">Behavior</th>
-                <th className="p-4 font-semibold">Severity</th>
-                <th className="p-4 font-semibold">Action Taken</th>
-                <th className="p-4 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {events.map((evt, i) => (
-                <tr key={i} className="hover:bg-white/5 transition-colors text-gray-300">
-                  <td className="p-4 font-mono">{evt.time}</td>
-                  <td className="p-4 font-mono">{evt.src}</td>
-                  <td className="p-4">{evt.behavior}</td>
-                  <td className="p-4">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                      evt.severity === 'Critical' ? 'bg-red-500/20 text-red-400' :
-                      evt.severity === 'High' ? 'bg-orange-500/20 text-orange-400' : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {evt.severity}
-                    </span>
-                  </td>
-                  <td className="p-4 text-gray-400">{evt.action}</td>
-                  <td className="p-4 flex items-center gap-2">
-                    {evt.status === 'Resolved' ? (
-                      <><CheckCircle2 className="h-4 w-4 text-green-400" /> <span className="text-green-400">Resolved</span></>
-                    ) : (
-                      <><Activity className="h-4 w-4 text-orange-400 animate-pulse" /> <span className="text-orange-400">Active</span></>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+  const [data, setData] = useState<Dashboard | null>(null); const [error, setError] = useState(false);
+  useEffect(() => { let stopped = false; let timer: number | undefined; const refresh = async () => { const response = await fetch("/api/admin/dashboard", { cache: "no-store" }); if (stopped) return; if (!response.ok) { setError(true); return; } const next = (await response.json()).dashboard as Dashboard; setData(next); if (next.active) timer = window.setTimeout(refresh, 2_000); }; void refresh(); return () => { stopped = true; if (timer) window.clearTimeout(timer); }; }, []);
+  if (error) return <State title="Abuse metrics unavailable" detail="The aggregate dashboard could not be loaded. Try again later." />;
+  if (!data) return <State title="Loading abuse metrics" detail="Reading aggregate run data…" />;
+  if (!data.hasData) return <div className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10"><Eyebrow /><section className="relative mt-6 overflow-hidden rounded-3xl border border-cyan-200/10 bg-[#071328]/80 p-6 shadow-[0_24px_100px_rgba(2,8,23,0.35)] backdrop-blur-xl sm:p-9"><div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-16 h-72 w-72 rounded-full border border-cyan-300/[0.08]"><div className="absolute inset-10 rounded-full border border-dashed border-blue-300/[0.12]" /></div><div className="relative max-w-2xl"><Badge>No run data</Badge><div className="mt-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08]"><ShieldAlert className="h-6 w-6 text-cyan-200" /></div><h1 className="mt-5 text-3xl font-semibold tracking-tight text-white">Threats &amp; abuse</h1><p className="mt-3 text-sm leading-7 text-slate-400">Aggregate enforcement metrics will appear after a simulator or experiment run. No synthetic events or identities are shown in this demo workspace.</p><Link href="/admin/simulator" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-4 py-3 text-sm font-semibold text-[#04101e]">Open simulator <ArrowUpRight className="h-4 w-4" /></Link></div></section></div>;
+  const o = data.operations;
+  return <div className="mx-auto w-full max-w-6xl space-y-7 p-5 sm:p-7 lg:p-10"><Eyebrow /><div className="flex flex-col justify-between gap-4 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end"><div><h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl"><span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06]"><ShieldAlert className="h-5 w-5 text-cyan-200" /></span>Threats &amp; abuse</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Aggregate enforcement outcomes from configured runs; individual identities and event logs are not exposed.</p></div><Badge>Demo workspace · aggregate data</Badge></div>
+    <section className="grid gap-4 md:grid-cols-3"><Card icon={<AlertTriangle />} label="Suspicious traffic" value={`${(o.suspiciousTraffic * 100).toFixed(2)}%`} note="Share flagged by the run" accent="amber" /><Card icon={<Activity />} label="Throttled requests" value={String(o.throttledRequests)} note="Aggregate throttle outcomes" accent="cyan" /><Card icon={<Ban />} label="Blocked requests" value={String(o.blockedRequests)} note="Aggregate block outcomes" accent="rose" /></section>
+    <section className="rounded-2xl border border-white/[0.08] bg-[#07101f]/75 p-5 shadow-[0_20px_70px_rgba(2,8,23,0.22)] backdrop-blur-xl sm:p-6"><div className="flex items-start gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-200/10 bg-cyan-300/[0.06]"><ShieldCheck className="h-5 w-5 text-cyan-200" /></div><div><div className="text-sm font-semibold text-white">Aggregate-only view</div><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">These values summarize enforcement behavior for the selected run data. This panel does not present a live incident feed or infer threat activity between runs.</p></div></div></section>
+  </div>;
 }
+function Eyebrow() { return <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500"><span>Monitoring</span><span className="text-slate-700">/</span><span className="text-cyan-200">Threats</span></div>; }
+function Card({ icon, label, value, note, accent }: { icon: React.ReactNode; label: string; value: string; note: string; accent: "amber" | "cyan" | "rose" }) { const theme = { amber: "border-amber-200/10 bg-amber-300/[0.07] text-amber-200", cyan: "border-cyan-200/10 bg-cyan-300/[0.07] text-cyan-200", rose: "border-rose-200/10 bg-rose-300/[0.07] text-rose-200" }[accent]; return <div className="rounded-2xl border border-white/[0.075] bg-[#07101f]/80 p-5 shadow-[0_14px_44px_rgba(2,8,23,0.2)] backdrop-blur-xl sm:p-6"><div className="flex items-center justify-between gap-3"><div className="text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500">{label}</div><span className={`rounded-lg border p-2 ${theme}`}><span className="block [&>svg]:h-4 [&>svg]:w-4">{icon}</span></span></div><div className="mt-5 font-mono text-3xl tracking-tight text-white sm:text-4xl">{value}</div><div className="mt-2 text-xs text-slate-500">{note}</div><div aria-hidden="true" className="mt-5 h-px bg-gradient-to-r from-cyan-300/30 via-blue-400/10 to-transparent" /></div>; }
+function State({ title, detail }: { title: string; detail: string }) { return <div className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10"><Eyebrow /><section className="mt-6 rounded-2xl border border-white/[0.08] bg-[#07101f]/80 p-7"><Badge>Demo workspace</Badge><h1 className="mt-5 text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-slate-400">{detail}</p></section></div>; }
+function Badge({ children }: { children: React.ReactNode }) { return <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.15em] text-cyan-100"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />{children}</span>; }

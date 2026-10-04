@@ -1,94 +1,32 @@
-import { BarChart3, Info, Users, Bot, Scale } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, BarChart3, Scale, ShieldCheck } from "lucide-react";
+
+type Dashboard = { hasData: boolean; active: boolean; fairness: { queuePositionDistribution: number[]; normalizedQueuePosition: number | null; allocationRateByBehavior: Record<string, number | null>; normalVsAttackDifference: number | string | null; participationRate: number | null; queueEntryRate: number | null; retryResilience: number | null; throttleRate: number | null; blockRate: number | null } };
 
 export default function FairnessPage() {
-  return (
-    <div className="p-6 md:p-8 w-full max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-          <Scale className="h-8 w-8 text-violet-500" />
-          Fairness Analysis
-        </h1>
-        <p className="text-gray-400">Quantifiable metrics proving allocation integrity against adversarial traffic.</p>
-      </div>
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => { let stopped = false; let timer: number | undefined; const refresh = async () => { const response = await fetch("/api/admin/dashboard", { cache: "no-store" }); if (stopped) return; if (!response.ok) { setError(true); return; } const next = (await response.json()).dashboard as Dashboard; setDashboard(next); if (next.active) timer = window.setTimeout(refresh, 2_000); }; void refresh(); return () => { stopped = true; if (timer) window.clearTimeout(timer); }; }, []);
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="glass-card p-6 rounded-xl border border-white/10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-bl-[100px] -mr-4 -mt-4" />
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Fairness Score</div>
-          <div className="text-5xl font-black text-white font-mono glow-text">94.8%</div>
-          <p className="text-xs text-green-400 mt-4 flex items-center gap-1">
-            <Info className="h-3 w-3" /> Baseline: 50%
-          </p>
-        </div>
+  if (error) return <State title="Fairness data unavailable" detail="The aggregate dashboard could not be loaded. Try again later." />;
+  if (!dashboard) return <State title="Loading fairness metrics" detail="Reading aggregate run data…" />;
+  if (!dashboard.hasData) return <div className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10"><PageEyebrow /><section className="relative overflow-hidden rounded-3xl border border-cyan-200/10 bg-[#071328]/80 p-6 shadow-[0_24px_100px_rgba(2,8,23,0.35)] backdrop-blur-xl sm:p-9"><div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-14 h-64 w-64 rounded-full border border-cyan-300/[0.08]"><div className="absolute inset-8 rounded-full border border-dashed border-blue-300/[0.12]" /></div><div className="relative max-w-2xl"><Badge>No run data</Badge><div className="mt-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.08]"><Scale className="h-6 w-6 text-cyan-200" /></div><h1 className="mt-5 text-3xl font-semibold tracking-tight text-white">Fairness analysis</h1><p className="mt-3 text-sm leading-7 text-slate-400">Fairness metrics appear here after a simulator or experiment run. This demo workspace does not fill gaps with generated measurements.</p><div className="mt-6 grid gap-2 sm:grid-cols-2"><Preview label="Queue position distribution" /><Preview label="Normal and attack allocation rates" /><Preview label="Participation and retry resilience" /><Preview label="Throttle and block impact" /></div><div className="mt-7 flex flex-wrap gap-3"><Link href="/admin/simulator" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-4 py-3 text-sm font-semibold text-[#04101e]">Open simulator <ArrowUpRight className="h-4 w-4" /></Link><Link href="/admin/experiments" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm font-medium text-slate-200">Open experiments <ArrowUpRight className="h-4 w-4" /></Link></div></div></section></div>;
 
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Bot Allocation</div>
-          <div className="text-4xl font-bold text-red-400 font-mono">3.1%</div>
-          <p className="text-xs text-gray-500 mt-4">Target: &lt; 5.0%</p>
-        </div>
-
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Dup. Allocation</div>
-          <div className="text-4xl font-bold text-white font-mono">0</div>
-          <p className="text-xs text-green-400 mt-4">Verified by constraints</p>
-        </div>
-
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">Overselling</div>
-          <div className="text-4xl font-bold text-white font-mono">0</div>
-          <p className="text-xs text-green-400 mt-4">Verified by constraints</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="glass-card p-6 rounded-xl border border-white/10">
-          <h3 className="font-bold text-white mb-6">Allocation vs Request Rate</h3>
-
-          <div className="h-64 flex items-end gap-2 px-4 pb-4 border-b border-l border-white/10 relative">
-            <div className="absolute inset-0 flex items-center justify-center text-gray-600 opacity-20">
-              [Scatter Plot Visualization Area]
-            </div>
-            {/* Fake trendline visualization */}
-            <div className="w-full h-full relative">
-              <svg viewBox="0 0 100 100" className="w-full h-full overflow-visible preserve-3d" preserveAspectRatio="none">
-                {/* Normal users cluster */}
-                <circle cx="20" cy="50" r="15" fill="rgba(59, 130, 246, 0.2)" />
-                <circle cx="25" cy="45" r="10" fill="rgba(59, 130, 246, 0.4)" />
-                <circle cx="15" cy="55" r="8" fill="rgba(59, 130, 246, 0.6)" />
-
-                {/* Bot cluster (high req, low alloc) */}
-                <circle cx="80" cy="90" r="10" fill="rgba(239, 68, 68, 0.2)" />
-                <circle cx="90" cy="85" r="12" fill="rgba(239, 68, 68, 0.4)" />
-                <circle cx="85" cy="95" r="8" fill="rgba(239, 68, 68, 0.6)" />
-              </svg>
-            </div>
-          </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-2">
-            <span>Low Requests (Normal)</span>
-            <span>High Requests (Bots)</span>
-          </div>
-        </div>
-
-        <div className="glass-card p-6 rounded-xl border border-white/10 flex flex-col justify-between">
-          <div>
-            <h3 className="font-bold text-white mb-2 flex items-center gap-2">
-              <Info className="h-5 w-5 text-violet-400" />
-              Why This Matters
-            </h3>
-            <div className="space-y-4 text-gray-400 text-sm mt-6">
-              <p>In traditional systems, probability of allocation is directly proportional to request volume and network proximity.</p>
-              <p>FairDrop decouples these metrics, ensuring that a user making 1 legitimate request has an equal or greater probability of allocation compared to an adversarial client making 1,000 automated requests.</p>
-
-              <div className="p-4 bg-violet-900/10 border border-violet-500/20 rounded-lg mt-4">
-                <div className="text-violet-300 font-mono text-xs">
-                  P(Alloc | Normal) = {((312 / 48000) * 100).toFixed(2)}% <br />
-                  P(Alloc | Bot) = {((12 / 2000) * 100).toFixed(2)}%
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const f = dashboard.fairness;
+  const distributionMax = Math.max(1, ...f.queuePositionDistribution);
+  return <div className="mx-auto w-full max-w-6xl space-y-7 p-5 sm:p-7 lg:p-10"><PageEyebrow /><div className="flex flex-col justify-between gap-4 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end"><div><h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl"><span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06]"><Scale className="h-5 w-5 text-cyan-200" /></span>Fairness analysis</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Aggregate fairness measurements from configured simulator and experiment runs.</p></div><Badge>Demo workspace · aggregate data</Badge></div>
+    <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 xl:gap-4"><Metric label="Normalized queue position" value={number(f.normalizedQueuePosition)} /><Metric label="Participation rate" value={percent(f.participationRate)} /><Metric label="Queue entry rate" value={percent(f.queueEntryRate)} /><Metric label="Retry resilience" value={percent(f.retryResilience)} /><Metric label="Throttle rate" value={percent(f.throttleRate)} /><Metric label="Block rate" value={percent(f.blockRate)} /><Metric label="Normal / attack difference" value={number(f.normalVsAttackDifference)} /></section>
+    <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="rounded-2xl border border-white/[0.08] bg-[#07101f]/75 p-5 shadow-[0_20px_70px_rgba(2,8,23,0.22)] backdrop-blur-xl sm:p-6"><div className="mb-6 flex items-center justify-between gap-3"><div><div className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-300/70">Measured distribution</div><h2 className="mt-1 text-lg font-semibold text-white">Queue position distribution</h2></div><BarChart3 className="h-4 w-4 text-slate-500" /></div>{f.queuePositionDistribution.length ? <><div className="flex h-40 items-end gap-1.5 border-b border-white/[0.07] px-1 sm:gap-2">{f.queuePositionDistribution.map((value, index) => <div key={index} className="group relative flex h-full flex-1 items-end"><div title={`${value} participants`} className="w-full rounded-t-sm border border-cyan-200/10 bg-gradient-to-t from-blue-600/50 to-cyan-300/75 shadow-[0_0_18px_rgba(34,211,238,0.09)] transition group-hover:from-blue-500/65 group-hover:to-cyan-200" style={{ height: `${Math.max(value > 0 ? 4 : 0, value / distributionMax * 100)}%` }} /></div>)}</div><div className="mt-3 flex justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-slate-600"><span>Lower position</span><span>Higher position</span></div></> : <p className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-slate-500">No queue-position distribution was recorded.</p>}</div><div className="rounded-2xl border border-white/[0.08] bg-[#07101f]/75 p-5 shadow-[0_20px_70px_rgba(2,8,23,0.22)] backdrop-blur-xl sm:p-6"><div className="mb-5"><div className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-300/70">Behavior cohorts</div><h2 className="mt-1 text-lg font-semibold text-white">Allocation rate by behavior</h2></div><div className="space-y-2.5">{Object.entries(f.allocationRateByBehavior).map(([key, value]) => <BehaviorRate key={key} label={key} value={value} />)}{Object.keys(f.allocationRateByBehavior).length === 0 ? <p className="text-sm text-slate-500">No behavior-group data recorded.</p> : null}</div><div className="mt-6 flex items-start gap-2 border-t border-white/[0.06] pt-4 text-xs leading-5 text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/70" />Results are aggregate run metrics; participant identities are not shown.</div></div></section>
+  </div>;
 }
+function PageEyebrow() { return <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500"><span>Monitoring</span><span className="text-slate-700">/</span><span className="text-cyan-200">Fairness</span></div>; }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-2xl border border-white/[0.075] bg-[#07101f]/80 p-4 shadow-[0_14px_44px_rgba(2,8,23,0.2)] backdrop-blur-xl sm:p-5"><div className="text-[10px] font-medium uppercase leading-4 tracking-[0.12em] text-slate-500">{label}</div><div className="mt-3 break-words font-mono text-xl text-white">{value}</div><div aria-hidden="true" className="mt-4 h-px bg-gradient-to-r from-cyan-300/35 via-blue-400/15 to-transparent" /></div>; }
+function BehaviorRate({ label, value }: { label: string; value: number | null }) { return <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-[#050b16]/65 p-3"><span className="truncate text-sm text-slate-400">{label}</span><span className="font-mono text-sm text-cyan-100">{percent(value)}</span></div>; }
+function Preview({ label }: { label: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#050b16]/60 p-3 text-sm text-slate-300">{label}</div>; }
+function State({ title, detail }: { title: string; detail: string }) { return <div className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10"><div className="mb-6"><PageEyebrow /></div><section className="rounded-2xl border border-white/[0.08] bg-[#07101f]/80 p-7"><Badge>Demo workspace</Badge><h1 className="mt-5 text-xl font-semibold text-white">{title}</h1><p className="mt-2 text-sm text-slate-400">{detail}</p></section></div>; }
+function Badge({ children }: { children: React.ReactNode }) { return <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.15em] text-cyan-100"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />{children}</span>; }
+function percent(value: number | null) { return value === null ? "—" : `${(value * 100).toFixed(2)}%`; }
+function number(value: number | string | null) { return typeof value === "number" ? value.toFixed(3) : value === null || value === "NOT_APPLICABLE" ? "—" : value; }

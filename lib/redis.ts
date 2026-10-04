@@ -2,7 +2,13 @@ import "server-only";
 
 import { Redis } from "@upstash/redis";
 
+let cachedRedis: Redis | null = null;
+
 export function getRedisClient(): Redis {
+  if (cachedRedis) {
+    return cachedRedis;
+  }
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -14,5 +20,6 @@ export function getRedisClient(): Redis {
     throw new Error("UPSTASH_REDIS_REST_TOKEN environment variable is not configured");
   }
 
-  return new Redis({ url, token });
+  cachedRedis = new Redis({ url, token });
+  return cachedRedis;
 }

@@ -1,142 +1,98 @@
 "use client";
 
-import { useState } from "react";
-import { Crosshair, Play, Square, Settings2, Shield, Zap, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Activity, Crosshair, Play, Radio, ShieldCheck, Square } from "lucide-react";
+
+type Run = {
+  simulationRunId: string;
+  status: string;
+  metrics: {
+    completedVirtualUsers: number;
+    totalVirtualUsers: number;
+    totalRequests: number;
+    requestsPerSecond: number;
+    responses: { throttled429: number };
+    latency: { p95Ms: number };
+    allocation: { successful: number };
+    execution?: {
+      configuredRequestRate: number;
+      elapsedMs: number;
+      peakInFlightRequests: number;
+      timedOutVirtualUsers: number;
+      cancelledVirtualUsers: number;
+      failedVirtualUsers: number;
+      lateScheduleCount: number;
+    };
+  };
+};
+
+const scenarios = ["NORMAL_TRAFFIC", "REQUEST_FLOOD", "BOT_SWARM", "DUPLICATE_ATTEMPTS", "TOKEN_REPLAY", "QUEUE_MANIPULATION", "MIXED_ATTACK"];
 
 export default function SimulatorPage() {
-  const [isRunning, setIsRunning] = useState(false);
+  const [users, setUsers] = useState(100);
+  const [duration, setDuration] = useState(60);
+  const [concurrency, setConcurrency] = useState(100);
+  const [requestRate, setRequestRate] = useState(250);
+  const [seed, setSeed] = useState(12345);
+  const [scenario, setScenario] = useState("MIXED_ATTACK");
+  const [distribution, setDistribution] = useState("");
+  const [run, setRun] = useState<Run | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const running = run?.status === "STARTING" || run?.status === "RUNNING" || run?.status === "STOPPING";
+  const runId = run?.simulationRunId;
+  const progress = run && run.metrics.totalVirtualUsers > 0 ? Math.min(100, run.metrics.completedVirtualUsers / run.metrics.totalVirtualUsers * 100) : 0;
 
-  return (
-    <div className="p-6 md:p-8 w-full max-w-7xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
-          <Crosshair className="h-8 w-8 text-violet-500" />
-          Adversarial Simulator
-        </h1>
-        <p className="text-gray-400">Test FairDrop's allocation engine against simulated attack vectors.</p>
-      </div>
+  useEffect(() => {
+    if (!runId || !running) return;
+    const timer = window.setInterval(async () => {
+      const response = await fetch(`/api/admin/simulator/${runId}`, { cache: "no-store" });
+      if (response.ok) setRun((await response.json()).run);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [runId, running]);
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Controls Panel */}
-        <div className="glass-card rounded-xl border border-white/10 p-6 flex flex-col h-fit">
-          <div className="flex items-center gap-2 text-white font-bold mb-6 border-b border-white/5 pb-4">
-            <Settings2 className="h-5 w-5" /> Simulation Parameters
-          </div>
+  async function start() {
+    setError(null);
+    let attackDistribution: Record<string, number> | undefined;
+    if (distribution.trim()) {
+      try { attackDistribution = JSON.parse(distribution) as Record<string, number>; } catch { setError("Attack distribution must be valid JSON."); return; }
+    }
+    const response = await fetch("/api/admin/simulator/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ virtualUsers: users, durationSeconds: duration, maxConcurrency: concurrency, requestRate, scenario, seed, attackDistribution }),
+    });
+    const result = await response.json();
+    if (!response.ok) { setError(result.detail ?? result.error); return; }
+    setRun({
+      ...result,
+      metrics: {
+        completedVirtualUsers: 0,
+        totalVirtualUsers: users,
+        totalRequests: 0,
+        requestsPerSecond: 0,
+        responses: { throttled429: 0 },
+        latency: { p95Ms: 0 },
+        allocation: { successful: 0 },
+        execution: { configuredRequestRate: requestRate, elapsedMs: 0, peakInFlightRequests: 0, timedOutVirtualUsers: 0, cancelledVirtualUsers: 0, failedVirtualUsers: 0, lateScheduleCount: 0 },
+      },
+    });
+  }
 
-          <div className="space-y-6 flex-1">
-            <div>
-              <label className="text-xs font-semibold text-gray-500 tracking-widest uppercase mb-3 block">Traffic Profile</label>
-              <div className="space-y-2">
-                {["Mixed Attack (Realistic)", "Request Flood", "Bot Swarm", "Token Replay", "Normal Traffic Only"].map((profile, i) => (
-                  <label key={i} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-black/40 hover:bg-white/5 cursor-pointer transition-colors">
-                    <input type="radio" name="profile" className="accent-violet-500" defaultChecked={i === 0} />
-                    <span className="text-sm text-gray-300">{profile}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+  async function stop() { if (run) await fetch(`/api/admin/simulator/${run.simulationRunId}/stop`, { method: "POST" }); }
 
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Simulated Users</label>
-                <span className="text-sm text-violet-400 font-mono">50,000</span>
-              </div>
-              <input type="range" className="w-full accent-violet-500" min="1000" max="100000" defaultValue="50000" />
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-semibold text-gray-500 tracking-widest uppercase">Attack Intensity</label>
-                <span className="text-sm text-red-400 font-mono">85%</span>
-              </div>
-              <input type="range" className="w-full accent-red-500" min="0" max="100" defaultValue="85" />
-            </div>
-          </div>
-
-          <div className="pt-8 mt-4 border-t border-white/5">
-            <button
-              onClick={() => setIsRunning(!isRunning)}
-              className={`w-full flex items-center justify-center gap-2 h-14 rounded-xl font-bold text-lg transition-all ${isRunning
-                  ? "bg-red-500/10 text-red-500 border border-red-500/50 hover:bg-red-500/20"
-                  : "bg-violet-600 text-white hover:bg-violet-500 glow-border"
-                }`}
-            >
-              {isRunning ? (
-                <><Square className="h-5 w-5 fill-current" /> STOP SIMULATION</>
-              ) : (
-                <><Play className="h-5 w-5 fill-current" /> LAUNCH SIMULATION</>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Visualization Panel */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="glass-card rounded-xl border border-white/10 p-1 relative overflow-hidden bg-black/80 h-80 flex items-center justify-center">
-            {/* Very abstract mock visualization of the simulation */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(139,92,246,0.1),transparent_70%)]" />
-
-            {!isRunning ? (
-              <div className="text-gray-500 flex flex-col items-center gap-4 z-10">
-                <Shield className="h-16 w-16 opacity-50" />
-                <p>System Ready. Waiting for simulation trigger.</p>
-              </div>
-            ) : (
-              <div className="w-full h-full p-8 flex flex-col justify-between relative z-10">
-                <div className="flex justify-between items-center">
-                  <div className="text-red-400 font-mono text-xl animate-pulse flex items-center gap-2"><Zap className="h-5 w-5" /> 18,492 req/s</div>
-                  <div className="text-green-400 font-mono text-xl flex items-center gap-2"><Shield className="h-5 w-5" /> MITIGATING</div>
-                </div>
-
-                {/* Visual particles mock using basic CSS */}
-                <div className="relative h-32 w-full border-y border-white/10 flex items-center justify-center overflow-hidden">
-                  <div className="absolute left-0 w-32 h-full bg-gradient-to-r from-background to-transparent z-10" />
-                  <div className="absolute right-0 w-32 h-full bg-gradient-to-l from-background to-transparent z-10" />
-
-                  {/* Just some CSS lines moving to represent traffic */}
-                  <div className="w-[200%] h-[2px] bg-red-500/50 absolute top-[30%] left-0 animate-[slide_1s_linear_infinite]" />
-                  <div className="w-[200%] h-[2px] bg-blue-500/50 absolute top-[50%] left-0 animate-[slide_2s_linear_infinite]" />
-                  <div className="w-[200%] h-[2px] bg-red-500/50 absolute top-[70%] left-0 animate-[slide_1.5s_linear_infinite]" />
-
-                  <div className="w-16 h-16 border-2 border-violet-500 rounded-full flex items-center justify-center bg-black z-20">
-                    <Shield className="h-8 w-8 text-violet-400" />
-                  </div>
-                </div>
-
-                <div className="flex justify-center gap-8 text-xs font-mono">
-                  <span className="text-red-400">BLOCKED: 48,291</span>
-                  <span className="text-blue-400">PASSED: 1,842</span>
-                  <span className="text-green-400">ALLOCATED: 312</span>
-                </div>
-              </div>
-            )}
-
-            <style jsx>{`
-              @keyframes slide {
-                0% { transform: translateX(0); }
-                100% { transform: translateX(-50%); }
-              }
-            `}</style>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Small live stats */}
-            {[
-              { label: "Overselling Risk", val: "0.0%", color: "text-green-400" },
-              { label: "Bot Penetration", val: "1.2%", color: "text-red-400", icon: AlertTriangle },
-              { label: "Avg Latency", val: "42ms", color: "text-blue-400" },
-              { label: "CPU Load", val: "38%", color: "text-gray-300" }
-            ].map((stat, i) => (
-              <div key={i} className="glass-card rounded-lg p-4 border border-white/5">
-                <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1 flex items-center gap-1">
-                  {stat.icon && <stat.icon className="h-3 w-3" />} {stat.label}
-                </div>
-                <div className={`text-xl font-bold font-mono ${stat.color}`}>{isRunning ? stat.val : "--"}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="mx-auto w-full max-w-6xl space-y-7 p-5 sm:p-7 lg:p-10">
+    <div className="flex flex-col justify-between gap-4 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end"><div><div className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500"><span>Testing &amp; data</span><span className="text-slate-700">/</span><span className="text-cyan-200">Simulator</span></div><h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl"><span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-300/15 bg-cyan-300/[0.06]"><Crosshair className="h-5 w-5 text-cyan-200" /></span>Adversarial simulator</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Configure bounded virtual-user workloads in the isolated simulator environment.</p></div><Badge>Demo workspace · isolated runner</Badge></div>
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(17rem,0.8fr)_minmax(0,1.35fr)] lg:gap-6">
+      <section className="rounded-2xl border border-white/[0.08] bg-[#07101f]/80 p-5 shadow-[0_20px_70px_rgba(2,8,23,0.25)] backdrop-blur-xl sm:p-6"><div className="mb-5 flex items-center justify-between gap-3 border-b border-white/[0.06] pb-4"><div><div className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-300/70">Workload setup</div><h2 className="mt-1 font-semibold text-white">Run parameters</h2></div><span className="rounded-lg border border-white/[0.06] bg-white/[0.025] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.12em] text-slate-500">Bounded</span></div><div className="space-y-4"><NumberInput label="Virtual users" value={users} min={1} max={50_000} onChange={setUsers} /><div className="grid grid-cols-2 gap-3"><NumberInput label="Duration (sec)" value={duration} min={1} max={300} onChange={setDuration} /><NumberInput label="Concurrency" value={concurrency} min={1} max={500} onChange={setConcurrency} /></div><div className="grid grid-cols-2 gap-3"><NumberInput label="Request rate (req/s)" value={requestRate} min={1} max={2_000} onChange={setRequestRate} /><NumberInput label="Seed" value={seed} min={0} max={2_147_483_647} onChange={setSeed} /></div><label className="block text-xs font-medium text-slate-400">Scenario<select className={fieldClass} value={scenario} onChange={(event) => setScenario(event.target.value)}>{scenarios.map((value) => <option key={value}>{value}</option>)}</select></label><label className="block text-xs font-medium text-slate-400">Mixed attack distribution <span className="font-normal text-slate-600">· optional JSON</span><textarea className={`${fieldClass} resize-y font-mono text-xs leading-5`} rows={3} placeholder='{"NORMAL_TRAFFIC":65,"REQUEST_FLOOD":10,...}' value={distribution} onChange={(event) => setDistribution(event.target.value)} /></label><div className="flex items-start gap-2 rounded-xl border border-cyan-200/[0.08] bg-cyan-300/[0.025] p-3 text-xs leading-5 text-slate-500"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300/70" />Isolated virtual-user workloads only; no Clerk accounts or demo-drop data are created.</div><button onClick={running ? stop : start} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 text-sm font-semibold text-[#04101e] shadow-[0_8px_30px_rgba(34,211,238,0.16)] transition hover:brightness-110">{running ? <><Square className="h-4 w-4" /> Stop simulation</> : <><Play className="h-4 w-4" /> Start simulation</>}</button>{error ? <p role="alert" className="text-sm text-rose-300">{error}</p> : null}</div></section>
+      <section className="rounded-2xl border border-white/[0.08] bg-[#07101f]/80 p-5 shadow-[0_20px_70px_rgba(2,8,23,0.25)] backdrop-blur-xl sm:p-6"><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><div className="font-mono text-[9px] uppercase tracking-[0.2em] text-cyan-300/70">Execution telemetry</div><h2 className="mt-1 text-lg font-semibold text-white">Run status</h2></div>{run ? <StatusPill active={running}>{run.status.replaceAll("_", " ")}</StatusPill> : <Badge>Awaiting run</Badge>}</div>{run ? <><div className="grid grid-cols-2 gap-3 sm:grid-cols-3"><Metric label="Progress" value={`${run.metrics.completedVirtualUsers} / ${run.metrics.totalVirtualUsers}`} /><Metric label="Requests" value={String(run.metrics.totalRequests)} /><Metric label="Target req / sec" value={String(run.metrics.execution?.configuredRequestRate ?? requestRate)} /><Metric label="Actual req / sec" value={run.metrics.requestsPerSecond.toFixed(1)} /><Metric label="P95 latency" value={formatMilliseconds(run.metrics.latency.p95Ms)} /><Metric label="429 responses" value={String(run.metrics.responses.throttled429)} /><Metric label="Allocations" value={String(run.metrics.allocation.successful)} /><Metric label="Timed out users" value={String(run.metrics.execution?.timedOutVirtualUsers ?? 0)} /><Metric label="Peak in-flight" value={String(run.metrics.execution?.peakInFlightRequests ?? 0)} /><Metric label="Cancelled users" value={String(run.metrics.execution?.cancelledVirtualUsers ?? 0)} /><Metric label="Failed workflows" value={String(run.metrics.execution?.failedVirtualUsers ?? 0)} /><Metric label="Late schedules" value={String(run.metrics.execution?.lateScheduleCount ?? 0)} /></div><div className="mt-5"><div className="mb-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.12em] text-slate-500"><span>Virtual user completion</span><span>{progress.toFixed(0)}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all" style={{ width: `${progress}%` }} /></div></div><p className="mt-5 text-xs leading-5 text-slate-500">Actual requests/sec is measured from completed simulator actions. A run can end at its configured duration before every virtual-user workflow finishes.</p></> : <div className="rounded-xl border border-dashed border-white/[0.1] bg-white/[0.015] p-8 text-center"><Radio className="mx-auto h-5 w-5 text-slate-600" /><p className="mt-3 text-sm font-medium text-slate-300">No simulation selected</p><p className="mt-1 text-xs text-slate-500">Configure a bounded virtual-user run to begin.</p></div>}</section>
+    </div><div className="flex items-center gap-2 px-1 text-xs text-slate-600"><Activity className="h-3.5 w-3.5" />Values shown here come from the selected simulator run.</div>
+  </div>;
 }
+
+const fieldClass = "mt-2 w-full rounded-xl border border-white/[0.09] bg-[#050b16] px-3 py-2.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-700 focus:border-cyan-300/35 focus:ring-2 focus:ring-cyan-300/[0.08]";
+function NumberInput({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) { return <label className="block text-xs font-medium text-slate-400">{label}<input className={`${fieldClass} font-mono`} type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>; }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-white/[0.06] bg-[#050b16]/65 p-3"><div className="text-[9px] uppercase leading-4 tracking-[0.12em] text-slate-500">{label}</div><div className="mt-2 break-words font-mono text-sm text-white">{value}</div></div>; }
+function Badge({ children }: { children: React.ReactNode }) { return <span className="inline-flex items-center gap-2 rounded-full border border-cyan-300/15 bg-cyan-300/[0.055] px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.15em] text-cyan-100"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />{children}</span>; }
+function StatusPill({ children, active }: { children: React.ReactNode; active: boolean }) { return <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] ${active ? "border-cyan-300/15 bg-cyan-300/[0.06] text-cyan-100" : "border-white/[0.07] bg-white/[0.03] text-slate-400"}`}><span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-cyan-300" : "bg-slate-500"}`} />{children}</span>; }
+function formatMilliseconds(value: number): string { return `${Number.isFinite(value) ? value.toFixed(1) : "0.0"} ms`; }

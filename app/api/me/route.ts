@@ -46,7 +46,7 @@ export async function GET() {
           lastName: clerkUser.lastName,
           imageUrl: clerkUser.imageUrl,
         },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: "after" }
       );
       
       console.log("MongoDB user found/created");

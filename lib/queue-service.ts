@@ -145,7 +145,7 @@ async function persistQueueEntry(input: QueueState & { clerkId: string }) {
       },
       {
         includeResultMetadata: true,
-        new: true,
+        returnDocument: "after",
         runValidators: true,
         setDefaultsOnInsert: true,
         upsert: true,
@@ -180,16 +180,21 @@ export async function finalizeQueueEntry(queue: QueueState): Promise<number> {
   const redis = getRedisClient();
 
   try {
-    await redis
+    const results = await redis
       .multi()
       .hset(queueEntryKey(environment, queue.dropId, queue.participantId), queue)
       .zadd(queueOrderKey(environment, queue.dropId), {
         score: queue.sequence,
         member: queue.participantId,
       })
+      .zcard(queueOrderKey(environment, queue.dropId))
       .exec();
 
-    return await redis.zcard(queueOrderKey(environment, queue.dropId));
+    const totalQueued = Number(results.at(-1));
+    if (!Number.isSafeInteger(totalQueued) || totalQueued < 1) {
+      throw new QueueUnavailableError();
+    }
+    return totalQueued;
   } catch {
     throw new QueueUnavailableError();
   }
@@ -275,6 +280,17 @@ export async function getQueueStatusForUser(dropId: string, clerkId: string) {
     queue = toQueueState(durableEntry);
   }
 
-  const totalQueued = await finalizeQueueEntry(queue);
+  // Queue status is read-heavy. The former implementation repaired the Redis
+  // mirror on every poll (HSET + ZADD + ZCARD), which made normal status
+  // polling write traffic. Repair only when the ordering mirror is missing.
+  let totalQueued: number;
+  try {
+    totalQueued = await redis.zcard(queueOrderKey(environment, dropId));
+  } catch {
+    throw new QueueUnavailableError();
+  }
+  if (totalQueued < queue.sequence) {
+    totalQueued = await finalizeQueueEntry(queue);
+  }
   return { queued: true as const, queue, totalQueued };
 }

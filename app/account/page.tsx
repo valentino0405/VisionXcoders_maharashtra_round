@@ -1,88 +1,15 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { UserProfile } from "@clerk/nextjs";
-import { Shield, Clock, Ticket } from "lucide-react";
+import { Shield, Ticket } from "lucide-react";
+import Link from "next/link";
+import { getTicketsForUser } from "@/lib/payment-service";
 
 export default async function AccountPage() {
   const user = await currentUser();
-  
-  return (
-    <div className="min-h-screen bg-background pt-24 pb-12 px-6 w-full max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
-      {/* Sidebar Profile info */}
-      <div className="w-full md:w-1/3 flex flex-col gap-6">
-        <div className="glass-card rounded-2xl p-6 border border-white/10">
-          <h2 className="text-xl font-bold mb-6 text-white border-b border-white/10 pb-4">Profile</h2>
-          {/* We could use Clerk's UserProfile but it brings its own heavy styling. 
-              We'll use a custom UI for the summary and maybe embed Clerk below if needed. */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="h-16 w-16 rounded-full bg-violet-600 flex items-center justify-center text-white text-xl font-bold">
-              {user?.firstName?.[0] || "U"}
-            </div>
-            <div>
-              <div className="font-bold text-lg text-white">{user?.firstName} {user?.lastName}</div>
-              <div className="text-sm text-gray-400">{user?.emailAddresses[0]?.emailAddress}</div>
-            </div>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex justify-between items-center py-2 border-b border-white/5">
-              <span className="text-gray-400 text-sm">Account Status</span>
-              <span className="text-green-400 text-sm font-medium flex items-center gap-1"><Shield className="h-3 w-3" /> Verified</span>
-            </div>
-            <div className="flex justify-between items-center py-2 border-b border-white/5">
-              <span className="text-gray-400 text-sm">Member Since</span>
-              <span className="text-white text-sm">Oct 2026</span>
-            </div>
-          </div>
-        </div>
-        
-        {/* You can still mount the Clerk UI if you want them to manage passwords etc */}
-        <div className="rounded-2xl overflow-hidden [&_.cl-rootBox]:w-full [&_.cl-card]:bg-[#0a0a0a] [&_.cl-card]:border [&_.cl-card]:border-white/10 [&_.cl-headerTitle]:text-white [&_.cl-headerSubtitle]:text-gray-400">
-          <UserProfile routing="hash" />
-        </div>
-      </div>
-      
-      {/* Main Content: History */}
-      <div className="w-full md:w-2/3 flex flex-col gap-6">
-        <div className="glass-card rounded-2xl p-6 border border-white/10">
-          <h2 className="text-xl font-bold mb-6 text-white border-b border-white/10 pb-4">Participation History</h2>
-          
-          <div className="space-y-4">
-            {/* Mock History Item 1 */}
-            <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-start gap-4">
-                <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center mt-1 shrink-0">
-                  <Ticket className="h-5 w-5 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-lg">Global Launch Drop</h3>
-                  <p className="text-gray-400 text-sm flex items-center gap-1"><Clock className="h-3 w-3" /> Oct 3, 2026</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <div className="text-green-400 font-bold mb-1">Allocated</div>
-                <div className="text-sm text-gray-500 font-mono">Seat A-184</div>
-              </div>
-            </div>
-
-            {/* Mock History Item 2 */}
-            <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-start gap-4">
-                <div className="h-10 w-10 rounded-full bg-gray-500/20 flex items-center justify-center mt-1 shrink-0">
-                  <Ticket className="h-5 w-5 text-gray-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-white text-lg">Beta Test Drop</h3>
-                  <p className="text-gray-400 text-sm flex items-center gap-1"><Clock className="h-3 w-3" /> Sep 15, 2026</p>
-                </div>
-              </div>
-              <div className="flex flex-col items-end">
-                <div className="text-gray-400 font-bold mb-1">Missed</div>
-                <div className="text-sm text-gray-500 font-mono">Queue #12,401</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const tickets = user ? await getTicketsForUser(user.id) : [];
+  const initials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}` || user?.emailAddresses[0]?.emailAddress?.[0] || "U";
+  return <main className="min-h-screen bg-[#030611] px-4 pb-16 pt-24 text-white sm:px-6"><div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[.8fr_1.2fr]">
+    <aside className="space-y-5"><section className="rounded-3xl border border-white/10 bg-[#101a2d] p-6"><div className="flex items-center gap-4"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-lg font-black text-violet-100">{initials.toUpperCase()}</div><div><p className="font-bold">{[user?.firstName,user?.lastName].filter(Boolean).join(" ") || "FairDrop participant"}</p><p className="mt-1 text-xs text-slate-400">{user?.emailAddresses[0]?.emailAddress}</p></div></div><p className="mt-5 flex items-center gap-2 text-sm text-emerald-200"><Shield className="h-4 w-4"/>Verified Clerk account</p></section><div className="rounded-3xl border border-white/10 bg-[#101a2d] p-2 [&_.cl-card]:border-0 [&_.cl-card]:bg-transparent [&_.cl-card]:shadow-none"><UserProfile routing="hash"/></div></aside>
+    <section className="rounded-3xl border border-white/10 bg-[#101a2d] p-6"><p className="text-xs font-bold uppercase tracking-[.2em] text-violet-300">Account</p><h1 className="mt-2 text-3xl font-black">Verified tickets</h1><p className="mt-2 text-sm text-slate-400">Only server-verified payments create records here.</p>{tickets.length===0?<div className="mt-6 rounded-2xl border border-dashed border-white/15 p-6"><Ticket className="h-7 w-7 text-violet-300"/><p className="mt-3 font-semibold">No verified ticket yet.</p><p className="mt-1 text-sm text-slate-400">Complete the live demo allocation and Razorpay test checkout to receive one.</p><Link href="/live-demo" className="mt-4 inline-block rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold">Open live demo</Link></div>:<div className="mt-6 space-y-3">{tickets.map(ticket=><article key={ticket.ticketId} className="rounded-2xl border border-white/10 bg-black/20 p-5"><p className="text-xs font-bold text-emerald-300">VERIFIED</p><p className="mt-2 text-xl font-black">Seat {ticket.seatId}</p><p className="mt-2 font-mono text-sm text-slate-300">{ticket.ticketCode}</p><p className="mt-2 text-xs text-slate-500">{ticket.dropId} · {ticket.issuedAt.toLocaleString()}</p></article>)}</div>}</section>
+  </div></main>;
 }

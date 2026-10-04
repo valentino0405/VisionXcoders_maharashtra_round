@@ -16,6 +16,6 @@ export async function saveFairnessSnapshot(snapshot: FairnessSnapshotData): Prom
       endedAt: new Date(snapshot.endedAt),
       snapshot,
     },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
+    { upsert: true, returnDocument: "after", setDefaultsOnInsert: true }
   ).exec();
 }

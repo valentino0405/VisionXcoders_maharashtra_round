@@ -58,7 +58,12 @@ export async function enterQueue(
   dependencies: QueueEngineDependencies
 ): Promise<QueueJoinResult> {
   const now = dependencies.now?.() ?? new Date();
-  const drop = await dependencies.getDrop(dropId);
+  // These reads are independent. Keeping the validation below unchanged lets a
+  // normal queue join use one MongoDB round trip instead of two.
+  const [drop, participant] = await Promise.all([
+    dependencies.getDrop(dropId),
+    dependencies.getParticipant(dropId, clerkId),
+  ]);
 
   if (!drop) {
     throw new QueueEngineError("DROP_NOT_FOUND");
@@ -70,8 +75,6 @@ export async function enterQueue(
   if (drop.status !== "ACTIVE" || !hasStarted || hasEnded) {
     throw new QueueEngineError("DROP_NOT_ACTIVE");
   }
-
-  const participant = await dependencies.getParticipant(dropId, clerkId);
 
   if (!participant) {
     throw new QueueEngineError("NOT_A_PARTICIPANT");

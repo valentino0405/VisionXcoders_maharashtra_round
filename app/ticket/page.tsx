@@ -1,107 +1,89 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { CheckCircle2, QrCode } from "lucide-react";
+import { ArrowRight, QrCode, ShieldCheck, Ticket as TicketIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function TicketPage() {
-  const [allocation, setAllocation] = useState<{
-    allocationId: string;
-    seatId: string;
-    allocatedAt: string;
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function recoverTicket() {
-      try {
-        const response = await fetch("/api/session", { cache: "no-store" });
-        const result = await response.json();
-        if (!response.ok || !result.state.allocation) {
-          if (!cancelled) setError(response.status === 401 ? "Sign in to view an allocation." : "No allocation is available yet.");
-          return;
-        }
-        if (!cancelled) setAllocation(result.state.allocation);
-      } catch {
-        if (!cancelled) setError("Ticket state is temporarily unavailable.");
-      }
-    }
-    void recoverTicket();
-    return () => { cancelled = true; };
-  }, []);
-
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 w-full">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center p-3 bg-green-500/20 rounded-full mb-4">
-          <CheckCircle2 className="h-8 w-8 text-green-400" />
-        </div>
-        <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">ALLOCATION CONFIRMED</h1>
-        <p className="text-gray-400">Your allocation was successfully secured.</p>
+    <main className="relative isolate flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#030611] px-4 py-12 text-white sm:px-6">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-1/2 top-[-16rem] h-[36rem] w-[56rem] -translate-x-1/2 rounded-full bg-blue-600/[0.12] blur-[140px]" />
+        <div className="absolute -left-40 top-1/3 h-96 w-96 rounded-full bg-cyan-500/[0.08] blur-[120px]" />
+        <div className="absolute -right-40 bottom-[-8rem] h-96 w-96 rounded-full bg-indigo-500/[0.1] blur-[130px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.025)_1px,transparent_1px)] bg-[size:72px_72px] [mask-image:linear-gradient(to_bottom,black,transparent_90%)]" />
       </div>
 
-      {/* Ticket Card */}
-      <div className="relative w-full max-w-md mx-auto">
-        {/* Glow behind ticket */}
-        <div className="absolute -inset-1 bg-gradient-to-b from-violet-600 to-cyan-600 rounded-[2rem] blur-xl opacity-30" />
-        
-        <div className="relative bg-[#0a0a0a] border border-white/10 rounded-[2rem] overflow-hidden shadow-2xl">
-          {/* Top section */}
-          <div className="p-8 border-b border-white/10 bg-gradient-to-b from-white/5 to-transparent">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Event</div>
-                <div className="text-xl font-bold text-white">Global Launch Drop</div>
+      <div className="w-full max-w-2xl">
+        <header className="mb-8 text-center">
+          <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-200/20 bg-cyan-300/[0.08] text-cyan-200 shadow-[0_0_32px_rgba(34,211,238,0.14)]">
+            <TicketIcon className="h-7 w-7" />
+          </div>
+          <div className="mb-3 flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/15 bg-amber-300/[0.05] px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.19em] text-amber-100/80 sm:text-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-200" /> FairDrop / preview ticket
+            </span>
+          </div>
+          <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Ticket proof preview</h1>
+          <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-400 sm:text-base">
+            This sample card demonstrates the ticket design only. It is not an allocation or entry pass linked to your account.
+          </p>
+        </header>
+
+        <section aria-label="Sample FairDrop ticket" className="relative mx-auto w-full max-w-xl">
+          <div aria-hidden="true" className="absolute -inset-1 rounded-[2rem] bg-gradient-to-br from-cyan-400/30 via-blue-600/20 to-indigo-500/25 blur-2xl" />
+          <div className="relative overflow-hidden rounded-[1.75rem] border border-cyan-100/[0.12] bg-gradient-to-br from-[#0b1629]/95 via-[#071225]/95 to-[#060b16]/95 shadow-[0_28px_100px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+            <div aria-hidden="true" className="absolute right-[-3rem] top-[-5rem] h-44 w-44 rounded-full bg-cyan-400/[0.08] blur-[70px]" />
+            <div className="relative border-b border-white/[0.08] p-5 sm:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Event · demo preview</div>
+                  <div className="text-xl font-bold tracking-tight text-white sm:text-2xl">Global Launch Drop</div>
+                </div>
+                <span className="rounded-full border border-amber-300/15 bg-amber-300/[0.05] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-amber-100/80">Sample only</span>
               </div>
-              <div className="px-3 py-1 bg-green-500/10 border border-green-500/20 text-green-400 rounded-full text-xs font-bold tracking-wide">
-                CONFIRMED
+
+              <div className="mt-8">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Example seat</div>
+                <div className="font-mono text-5xl font-black tracking-tight text-white drop-shadow-[0_0_30px_rgba(34,211,238,0.25)] sm:text-6xl">A-184</div>
               </div>
             </div>
-            
-            <div className="flex justify-between items-end">
-              <div>
-                <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Seat</div>
-                <div className="text-5xl font-black font-mono text-white glow-text">{allocation?.seatId ?? "--"}</div>
+
+            <div aria-hidden="true" className="relative z-10 -my-3 flex h-6 items-center justify-between">
+              <span className="h-6 w-3 rounded-r-full border-y border-r border-white/[0.1] bg-[#081020]" />
+              <span className="mx-2 flex-1 border-t border-dashed border-cyan-100/15" />
+              <span className="h-6 w-3 rounded-l-full border-y border-l border-white/[0.1] bg-[#081020]" />
+            </div>
+
+            <div className="relative grid gap-6 p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-8">
+              <div className="space-y-5">
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Sample reference</div>
+                  <div className="font-mono text-sm text-slate-200">FD-PREVIEW-82A91</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Example timestamp</div>
+                  <div className="font-mono text-sm text-slate-300">2026-10-03 18:45:12</div>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <ShieldCheck className="h-4 w-4 text-cyan-300" /> Preview only · not valid for entry
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-cyan-100/70">
+                  <QrCode className="h-20 w-20" />
+                </div>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-600">Visual placeholder</span>
               </div>
             </div>
           </div>
-          
-          {/* Middle cutout effect */}
-          <div className="relative h-8 flex items-center justify-between -my-4 z-10 px-0">
-            <div className="h-8 w-4 bg-background rounded-r-full border-r border-y border-white/10"></div>
-            <div className="flex-1 border-t-2 border-dashed border-white/10 mx-2"></div>
-            <div className="h-8 w-4 bg-background rounded-l-full border-l border-y border-white/10"></div>
-          </div>
-          
-          {/* Bottom section */}
-          <div className="p-8 flex items-center justify-between">
-            <div className="space-y-4">
-              <div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Allocation ID</div>
-                <div className="text-sm font-mono text-gray-300">{allocation?.allocationId ?? "--"}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Timestamp</div>
-                <div className="text-sm font-mono text-gray-300">{allocation ? new Date(allocation.allocatedAt).toLocaleString() : "--"}</div>
-              </div>
-              <div>
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Session Status</div>
-                <div className="text-sm text-green-400 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Verified</div>
-              </div>
-            </div>
-            
-            <div className="p-2 bg-white rounded-xl">
-              <QrCode className="h-24 w-24 text-black" />
-            </div>
-          </div>
+        </section>
+
+        <div className="mt-6 flex justify-center">
+          <Link href="/account" className="group inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-white/[0.035] px-5 py-3 text-sm font-medium text-slate-300 transition hover:border-cyan-200/25 hover:bg-cyan-300/[0.06] hover:text-white">
+            Back to account
+            <ArrowRight className="h-4 w-4 text-cyan-300 transition-transform group-hover:translate-x-1" />
+          </Link>
         </div>
       </div>
-      {error ? <p role="alert" className="mt-6 text-sm text-red-300">{error}</p> : null}
-      
-      <Link href="/account" className="mt-12 text-gray-400 hover:text-white transition-colors">
-        View in My Account
-      </Link>
-    </div>
+    </main>
   );
 }

@@ -24,6 +24,7 @@
     "test:experiments": "node --experimental-strip-types --test tests/experiment-engine.test.ts",
     "test:dashboard": "node --experimental-strip-types --test tests/dashboard-aggregation.test.ts",
     "test:reports": "node --experimental-strip-types --test tests/report-engine.test.ts"
+    ,"test:live-demo": "node --experimental-strip-types --test tests/live-demo-scenarios.test.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",

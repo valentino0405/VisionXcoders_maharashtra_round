@@ -28,9 +28,9 @@ function runId() { return `sim_${new Date().toISOString().replace(/[-:.TZ]/g, ""
 function simulationDropId(id: string) { return `fairdrop-sim-${id.toLowerCase().replaceAll("_", "-").slice(-40)}`; }
 function denied(decision: { classification: string }) { return decision.classification === "THROTTLED" ? 429 : decision.classification === "BLOCKED" ? 403 : 0; }
 
-async function ensureSimulationDrop(dropId: string) {
+async function ensureSimulationDrop(dropId: string, capacity = 500) {
   const now = new Date();
-  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity: 500, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, returnDocument: "after" });
+  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, returnDocument: "after" });
 }
 
 export async function cleanupSimulation(dropId: string, users: VirtualUser[], states: Map<number, UserState>) {
@@ -120,7 +120,7 @@ async function action(user: VirtualUser, requested: SimulationAction, dropId: st
   }
 }
 
-async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean }; retainResources?: boolean }) {
+async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean }; retainResources?: boolean; capacity?: number }) {
   try {
     if (run.control.cancelled) {
       await updateSimulationRun(run.simulationRunId, { status: "CANCELLED", completedAt: new Date() });
@@ -129,7 +129,7 @@ async function execute(run: { simulationRunId: string; dropId: string; config: S
     await updateSimulationRun(run.simulationRunId, { status: "RUNNING", startedAt: new Date() });
     const result = await runFairDropSimulation(run.simulationRunId, run.dropId, run.config, run.control, async (metrics) => {
       await updateSimulationRun(run.simulationRunId, { status: run.control.cancelled ? "STOPPING" : "RUNNING", metrics });
-    }, run.retainResources);
+    }, run.retainResources, run.capacity);
     await completeSimulationRun(result);
   } catch (error) {
     await updateSimulationRun(run.simulationRunId, { status: "FAILED", completedAt: new Date(), errorSummary: error instanceof Error ? error.message.slice(0, 500) : "Unexpected simulator failure" });
@@ -145,13 +145,14 @@ export async function runFairDropSimulation(
   config: SimulationConfig,
   control: { cancelled: boolean },
   onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void,
-  retainResources = false
+  retainResources = false,
+  capacity = 500
 ) {
   const users = new Map<number, VirtualUser>();
   const states = new Map<number, UserState>();
   try {
     await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
-    await ensureSimulationDrop(dropId);
+    await ensureSimulationDrop(dropId, capacity);
     return await runSimulation(simulationRunId, dropId, config, {
       executeAction: async (user, requested) => { users.set(user.index, user); return action(user, requested, dropId, states); },
       isCancelled: () => control.cancelled,
@@ -181,8 +182,37 @@ async function startSimulationInternal(config: SimulationConfig, ownerClerkId?: 
 
 /** Restricted live-demo entry point. It shares the exact simulator and FairDrop services,
  * while retaining its isolated drop long enough for the authenticated judge to inspect it. */
-export async function startLiveDemoSimulation(config: SimulationConfig, ownerClerkId: string) {
-  return startSimulationInternal(config, ownerClerkId, true);
+export async function startLiveDemoSimulation(config: SimulationConfig, ownerClerkId: string, capacity = 500, preloadedAllocated = 0) {
+  const resolved = validateSimulationConfig(config);
+  if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > 5_000 || !Number.isSafeInteger(preloadedAllocated) || preloadedAllocated < 0 || preloadedAllocated > capacity) throw new Error("Invalid live scenario configuration");
+  await connectToDatabase();
+  const simulationRunId = runId();
+  const dropId = `fairdrop-live-demo-${simulationRunId.toLowerCase().replaceAll("_", "-").slice(-40)}`;
+  const control = { cancelled: false };
+  activeRuns.set(simulationRunId, control);
+  await ensureSimulationDrop(dropId, capacity);
+  await Promise.all([Participation.init(), QueueEntry.init(), Allocation.init()]);
+  for (let index = 0; index < preloadedAllocated; index += 1) {
+    const clerkId = `scenario-preload-${simulationRunId}-${index.toString().padStart(4, "0")}`;
+    await joinDropForUser(dropId, clerkId);
+    await enterQueueForUser(dropId, clerkId);
+    await claimAllocationForUser(dropId, clerkId);
+  }
+  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: { ...resolved, liveScenario: { capacity, preloadedAllocated } }, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved), ownerClerkId });
+  await updateSimulationRun(simulationRunId, { status: "STARTING" });
+  void execute({ simulationRunId, dropId, config: resolved, control, retainResources: true, capacity });
+  return { simulationRunId, dropId, status: "STARTING" as SimulationRunStatus };
+}
+
+export async function resetLiveDemoSimulation(simulationRunId: string, ownerClerkId: string) {
+  await connectToDatabase();
+  const run = await (await import("@/models/SimulationRun")).default.findOne({ simulationRunId, ownerClerkId }).lean();
+  if (!run) return false;
+  if (activeRuns.has(simulationRunId)) return false;
+  const participations = await Participation.find({ dropId: run.dropId }).lean();
+  await cleanupSimulation(run.dropId, participations.map((participant, index) => ({ index, virtualUserId: participant.participantId, clerkId: participant.clerkId, profile: "NORMAL_TRAFFIC", seed: index })), new Map());
+  await updateSimulationRun(simulationRunId, { status: "CANCELLED", completedAt: new Date() });
+  return true;
 }
 export async function stopSimulation(simulationRunId: string) {
   const control = activeRuns.get(simulationRunId);

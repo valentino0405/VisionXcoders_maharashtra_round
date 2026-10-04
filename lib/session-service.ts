@@ -121,7 +121,21 @@ async function recoverAuthoritativeState(
 export async function recoverSessionForUser(clerkId: string, sessionId?: string | null) {
   const environment = getFairDropEnvironment();
   const ttlSeconds = getSessionTtlSeconds();
-  const redis = getRedisClient();
+
+  // Obtain the Redis client if it is configured. Redis is used only as a
+  // session cache — the authoritative state lives in MongoDB. If Redis is
+  // unavailable or unconfigured we degrade gracefully: readSession returns
+  // null (no cached session) and writeSession is a no-op. This mirrors the
+  // fail-open behaviour of the abuse engine.
+  let redis: ReturnType<typeof getRedisClient> | null = null;
+  try {
+    redis = getRedisClient();
+  } catch {
+    console.warn(
+      "[FairDrop] Redis client unavailable for session service; " +
+        "session will be recovered from MongoDB without caching.",
+    );
+  }
 
   try {
     await connectToDatabase();
@@ -129,11 +143,37 @@ export async function recoverSessionForUser(clerkId: string, sessionId?: string 
       { clerkId, sessionId, ttlSeconds },
       {
         readSession: async (requestedSessionId) => {
-          const value = await redis.get<unknown>(sessionRedisKey(environment, requestedSessionId));
-          return isStoredSession(value) ? value : null;
+          if (!redis) return null;
+          try {
+            const value = await redis.get<unknown>(sessionRedisKey(environment, requestedSessionId));
+            return isStoredSession(value) ? value : null;
+          } catch {
+            // Redis is temporarily unavailable. Fall through to a full
+            // MongoDB state recovery — authoritative, slightly slower.
+            console.warn(
+              "[FairDrop] Redis read failed during session recovery; " +
+                "recovering authoritative state from MongoDB.",
+            );
+            return null;
+          }
         },
         writeSession: async (session, ttl) => {
-          await redis.set(sessionRedisKey(environment, session.sessionId), session, { ex: ttl });
+          if (!redis) return;
+          try {
+            await redis.set(
+              sessionRedisKey(environment, session.sessionId),
+              session,
+              { ex: ttl },
+            );
+          } catch {
+            // Session caching failed. The user's state is already returned
+            // from MongoDB; not caching only affects performance of the next
+            // request, not correctness.
+            console.warn(
+              "[FairDrop] Redis write failed during session caching; " +
+                "session state will not be cached this request.",
+            );
+          }
         },
         recoverAuthoritativeState,
         createSessionId: () => `fs_${randomUUID().replaceAll("-", "")}`,
@@ -141,7 +181,8 @@ export async function recoverSessionForUser(clerkId: string, sessionId?: string 
     );
   } catch (error) {
     if (error instanceof SessionUnavailableError) throw error;
-    // Both MongoDB and Redis failures are intentionally presented as one safe temporary error.
+    // MongoDB failure — this is genuinely unavailable.
+    console.error("[FairDrop] Session recovery failed (MongoDB may be unavailable)", error instanceof Error ? error.message : error);
     throw new SessionUnavailableError();
   }
 }

@@ -41,10 +41,12 @@ export async function GET() {
       const user = await User.findOneAndUpdate(
         { clerkId: clerkUser.id },
         {
-          email: primaryEmail,
-          firstName: clerkUser.firstName,
-          lastName: clerkUser.lastName,
-          imageUrl: clerkUser.imageUrl,
+          $set: {
+            email: primaryEmail,
+            firstName: clerkUser.firstName,
+            lastName: clerkUser.lastName,
+            imageUrl: clerkUser.imageUrl,
+          },
         },
         { upsert: true, returnDocument: "after" }
       );

@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignInButton, SignUpButton, Show, UserButton } from "@clerk/nextjs";
-import { ArrowRight, Moon, Shield, Activity, Users } from "lucide-react";
+import { ArrowRight, Moon, Shield, Activity, Users, UserRound } from "lucide-react";
+import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 
 export function Navbar() {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
+  const isAdmin = useIsAdmin();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#030611]/80 backdrop-blur-xl transition-all duration-300">
@@ -63,14 +65,16 @@ export function Navbar() {
                 <Users className="h-4 w-4" /> Drop Window
               </Link>
               <Link href="/live-demo" className={`transition-colors ${pathname === "/live-demo" ? "text-cyan-400 font-semibold" : "text-gray-400 hover:text-white"}`}>Live Demo</Link>
-              <Link 
-                href="/admin" 
-                className={`transition-colors flex items-center gap-1.5 ${
-                  pathname.startsWith("/admin") ? "text-cyan-400 font-semibold" : "text-gray-400 hover:text-white"
-                }`}
-              >
-                <Activity className="h-4 w-4" /> Operations
-              </Link>
+              {isAdmin && (
+                <Link 
+                  href="/admin" 
+                  className={`transition-colors flex items-center gap-1.5 ${
+                    pathname.startsWith("/admin") ? "text-cyan-400 font-semibold" : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <Activity className="h-4 w-4" /> Operations
+                </Link>
+              )}
               <Link 
                 href="/ticket" 
                 className={`transition-colors flex items-center gap-1.5 ${
@@ -78,6 +82,14 @@ export function Navbar() {
                 }`}
               >
                 <Shield className="h-4 w-4" /> Ticket Proof
+              </Link>
+              <Link 
+                href="/account" 
+                className={`transition-colors flex items-center gap-1.5 ${
+                  pathname === "/account" ? "text-cyan-400 font-semibold" : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <UserRound className="h-4 w-4" /> Profile
               </Link>
             </Show>
           </div>

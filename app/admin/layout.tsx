@@ -13,7 +13,9 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  ShieldX,
 } from "lucide-react";
+import { useIsAdmin } from "@/lib/hooks/use-is-admin";
 
 const items = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, group: "Control room" },
@@ -27,6 +29,48 @@ const items = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isAdmin = useIsAdmin();
+
+  // Loading state
+  if (isAdmin === null) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#030611] text-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+          <p className="text-sm text-slate-400">Verifying access…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied for non-admins
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#030611] text-white">
+        <div className="relative mx-4 max-w-md overflow-hidden rounded-3xl border border-red-500/20 bg-[#071328]/80 p-8 text-center shadow-[0_24px_100px_rgba(239,68,68,0.12)] backdrop-blur-xl sm:p-12">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-16 h-72 w-72 rounded-full border border-red-500/[0.08]">
+            <div className="absolute inset-10 rounded-full border border-dashed border-red-400/[0.12]" />
+          </div>
+          <div className="relative">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/[0.08]">
+              <ShieldX className="h-8 w-8 text-red-400" />
+            </div>
+            <h1 className="mt-6 text-2xl font-semibold tracking-tight">Access Denied</h1>
+            <p className="mt-3 text-sm leading-7 text-slate-400">
+              The Operations console is restricted to FairDrop administrators. If you believe you should have access, contact your workspace owner.
+            </p>
+            <Link
+              href="/"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-500 px-5 py-3 text-sm font-semibold text-[#04101e] shadow-[0_8px_30px_rgba(34,211,238,0.18)] transition hover:brightness-110"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const nav = (mobile = false) => (
     <nav aria-label="Operations pages" className={mobile ? "flex min-w-max gap-2 px-4 py-3" : "space-y-1 px-3 py-5"}>
       {items.map((item, index) => {
@@ -99,3 +143,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     </div>
   );
 }
+

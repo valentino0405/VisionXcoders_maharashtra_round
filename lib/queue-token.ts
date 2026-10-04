@@ -34,14 +34,50 @@ function signature(encodedPayload: string, secret: string): string {
   return createHmac("sha256", secret).update(encodedPayload).digest("base64url");
 }
 
+/**
+ * Raised when the token secret is not configured in production.
+ * The queue-join route catches this specifically and returns 503.
+ */
+export class QueueTokenConfigError extends Error {
+  constructor() {
+    super("QUEUE_TOKEN_SECRET is not configured or too short");
+    this.name = "QueueTokenConfigError";
+  }
+}
+
+/**
+ * Development-only fallback secret used when QUEUE_TOKEN_SECRET is absent or
+ * shorter than 32 characters. Tokens issued with this secret are only valid
+ * within the same development process. In production the env var is required.
+ */
+const DEV_FALLBACK_SECRET = "dev-fairdrop-queue-token-secret-development";
+
 export function getQueueTokenSecret(): string {
   const secret = process.env.QUEUE_TOKEN_SECRET;
 
-  if (!secret || secret.length < 32) {
-    throw new Error("QUEUE_TOKEN_SECRET must contain at least 32 characters");
+  if (secret && secret.length >= 32) {
+    return secret;
   }
 
-  return secret;
+  // Allow the app to work out-of-the-box in development without manual env setup.
+  if (process.env.NODE_ENV !== "production") {
+    if (!secret) {
+      console.warn(
+        "[FairDrop] QUEUE_TOKEN_SECRET is not set. " +
+          "Using a development-only fallback. " +
+          "Add QUEUE_TOKEN_SECRET (≥ 32 characters) to .env.local before deploying.",
+      );
+    } else {
+      console.warn(
+        `[FairDrop] QUEUE_TOKEN_SECRET is only ${secret.length} characters (minimum 32). ` +
+          "Using a development-only fallback. Set a longer value in .env.local.",
+      );
+    }
+    return DEV_FALLBACK_SECRET;
+  }
+
+  // In production, a proper secret is non-negotiable.
+  throw new QueueTokenConfigError();
 }
 
 export function issueQueueToken(

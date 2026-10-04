@@ -6,7 +6,7 @@ import { parseDropJoinRequest } from "@/lib/drop-engine";
 import connectToDatabase from "@/lib/mongodb";
 import { QueueEngineError } from "@/lib/queue-engine";
 import { QueueUnavailableError, enterQueueForUser } from "@/lib/queue-service";
-import { getQueueTokenSecret, issueQueueToken } from "@/lib/queue-token";
+import { getQueueTokenSecret, issueQueueToken, QueueTokenConfigError } from "@/lib/queue-token";
 import QueueEntry from "@/models/QueueEntry";
 
 export const dynamic = "force-dynamic";
@@ -97,7 +97,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "QUEUE_UNAVAILABLE" }, { status: 503 });
     }
 
-    console.error("Queue join failed");
+    if (error instanceof QueueTokenConfigError) {
+      console.error(
+        "[FairDrop] QUEUE_TOKEN_SECRET is not configured correctly. " +
+          "Set QUEUE_TOKEN_SECRET (≥ 32 characters) in .env.local.",
+      );
+      return Response.json({ error: "QUEUE_UNAVAILABLE" }, { status: 503 });
+    }
+
+    console.error("Queue join failed", error instanceof Error ? error.message : error);
     return Response.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
   }
 }

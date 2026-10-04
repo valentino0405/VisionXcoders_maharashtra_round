@@ -14,7 +14,6 @@ import {
   CheckCircle2, 
   Sparkles,
   Server,
-  Layers,
   Scale,
   Clock
 } from "lucide-react";
@@ -261,7 +260,7 @@ export default function Home() {
             How FairDrop Solves the <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-blue-500">50,000 Flash Crowd</span>
           </h2>
           <p className="text-gray-400 text-sm sm:text-base leading-relaxed">
-            When 50,000 people arrive at the same second, arrival millisecond shouldn't reward bot swarms. Our multi-stage pipeline normalizes entry, filters abuse, and allocates deterministically.
+            When 50,000 people arrive at the same second, arrival millisecond shouldn&apos;t reward bot swarms. Our multi-stage pipeline normalizes entry, filters abuse, and allocates deterministically.
           </p>
         </div>
 

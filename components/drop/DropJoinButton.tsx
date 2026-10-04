@@ -25,14 +25,27 @@ export default function DropJoinButton() {
       });
 
       if (!response.ok) {
+        let body: { error?: string } = {};
+        try {
+          body = await response.json();
+        } catch {
+          // ignore parse errors
+        }
+        const code = body.error;
         const message =
           response.status === 401
-            ? "Sign in to join the drop."
+            ? "Please sign in to join the drop."
             : response.status === 429
               ? "Too many requests. Please try again in a few seconds."
               : response.status === 403
                 ? "Access is temporarily restricted. Please try again later."
-                : "Unable to join the drop.";
+                : code === "DROP_NOT_FOUND"
+                  ? "This drop does not exist. Please check the link and try again."
+                  : code === "DROP_NOT_ACTIVE"
+                    ? "This drop is not currently active. Check back when it opens."
+                    : response.status === 503
+                      ? "The drop service is temporarily unavailable. Please try again shortly."
+                      : "Unable to join the drop. Please try again.";
         setError(message);
         return;
       }

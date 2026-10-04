@@ -130,49 +130,66 @@ async function reserveQueueEntry(input: {
 
 async function persistQueueEntry(input: QueueState & { clerkId: string }) {
   const filter = { dropId: input.dropId, participantId: input.participantId };
+  const MAX_SEQUENCE_RETRIES = 3;
 
-  try {
-    const result = await QueueEntry.findOneAndUpdate(
-      filter,
-      {
-        $setOnInsert: {
-          queueEntryId: input.queueEntryId,
-          clerkId: input.clerkId,
-          sequence: input.sequence,
-          status: input.status,
-          joinedAt: new Date(input.joinedAt),
+  let currentSequence = input.sequence;
+
+  for (let attempt = 0; attempt <= MAX_SEQUENCE_RETRIES; attempt++) {
+    try {
+      const result = await QueueEntry.findOneAndUpdate(
+        filter,
+        {
+          $setOnInsert: {
+            queueEntryId: input.queueEntryId,
+            clerkId: input.clerkId,
+            sequence: currentSequence,
+            status: input.status,
+            joinedAt: new Date(input.joinedAt),
+          },
         },
-      },
-      {
-        includeResultMetadata: true,
-        returnDocument: "after",
-        runValidators: true,
-        setDefaultsOnInsert: true,
-        upsert: true,
+        {
+          includeResultMetadata: true,
+          returnDocument: "after",
+          runValidators: true,
+          setDefaultsOnInsert: true,
+          upsert: true,
+        }
+      );
+
+      if (!result.value) {
+        throw new Error("Queue entry upsert returned no document");
       }
-    );
 
-    if (!result.value) {
-      throw new Error("Queue entry upsert returned no document");
-    }
+      return {
+        queue: toQueueState(result.value),
+        created: result.lastErrorObject?.updatedExisting === false,
+      };
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
 
-    return {
-      queue: toQueueState(result.value),
-      created: result.lastErrorObject?.updatedExisting === false,
-    };
-  } catch (error) {
-    if (!isDuplicateKeyError(error)) {
+      // If this participant already has an entry (collision on dropId+participantId),
+      // return it as a duplicate.
+      const existing = await QueueEntry.findOne(filter);
+
+      if (existing) {
+        return { queue: toQueueState(existing), created: false };
+      }
+
+      // Collision was on the (dropId, sequence) index — a different participant
+      // grabbed this sequence. Retry with the next sequence number.
+      if (attempt < MAX_SEQUENCE_RETRIES) {
+        currentSequence++;
+        continue;
+      }
+
       throw error;
     }
-
-    const existing = await QueueEntry.findOne(filter);
-
-    if (!existing) {
-      throw error;
-    }
-
-    return { queue: toQueueState(existing), created: false };
   }
+
+  // TypeScript: unreachable, but satisfies the return type.
+  throw new Error("Queue entry persist exhausted retries");
 }
 
 export async function finalizeQueueEntry(queue: QueueState): Promise<number> {

@@ -26,8 +26,10 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",
+    "@types/three": "^0.186.0",
     "@upstash/redis": "^1.39.0",
     "clsx": "^2.1.1",
+    "cobe": "^2.0.1",
     "framer-motion": "^14.0.0",
     "lucide-react": "^1.51.0",
     "mongodb": "^7.7.0",
@@ -36,7 +38,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "svix": "^2.6.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

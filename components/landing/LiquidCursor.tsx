@@ -40,7 +40,7 @@ export function LiquidCursor() {
 
   return (
     <motion.div
-      className="pointer-events-none fixed left-0 top-0 z-0 h-[300px] w-[300px] rounded-full bg-violet-600/20 blur-[80px] mix-blend-screen"
+      className="pointer-events-none fixed left-0 top-0 z-0 h-[360px] w-[360px] rounded-full bg-blue-500/15 blur-[110px] mix-blend-screen"
       style={{
         x: cursorXSpring,
         y: cursorYSpring,

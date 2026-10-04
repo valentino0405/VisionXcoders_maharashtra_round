@@ -324,7 +324,7 @@ function wilsonInterval(successes: number, total: number): { lower: number; uppe
   return { lower: (centre - margin) / denominator, upper: (centre + margin) / denominator, method: "WILSON" };
 }
 
-function rateMetric(
+export function rateMetric(
   numerator: number,
   denominator: number,
   details: Pick<RateMetric, "definition" | "formula" | "population" | "timeWindow" | "interpretation" | "limitation">

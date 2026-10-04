@@ -1,7 +1,36 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { CheckCircle2, QrCode } from "lucide-react";
 import Link from "next/link";
 
 export default function TicketPage() {
+  const [allocation, setAllocation] = useState<{
+    allocationId: string;
+    seatId: string;
+    allocatedAt: string;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function recoverTicket() {
+      try {
+        const response = await fetch("/api/session", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok || !result.state.allocation) {
+          if (!cancelled) setError(response.status === 401 ? "Sign in to view an allocation." : "No allocation is available yet.");
+          return;
+        }
+        if (!cancelled) setAllocation(result.state.allocation);
+      } catch {
+        if (!cancelled) setError("Ticket state is temporarily unavailable.");
+      }
+    }
+    void recoverTicket();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 w-full">
       <div className="text-center mb-8">
@@ -33,7 +62,7 @@ export default function TicketPage() {
             <div className="flex justify-between items-end">
               <div>
                 <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Seat</div>
-                <div className="text-5xl font-black font-mono text-white glow-text">A-184</div>
+                <div className="text-5xl font-black font-mono text-white glow-text">{allocation?.seatId ?? "--"}</div>
               </div>
             </div>
           </div>
@@ -50,11 +79,11 @@ export default function TicketPage() {
             <div className="space-y-4">
               <div>
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Allocation ID</div>
-                <div className="text-sm font-mono text-gray-300">FD-82A91-X</div>
+                <div className="text-sm font-mono text-gray-300">{allocation?.allocationId ?? "--"}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Timestamp</div>
-                <div className="text-sm font-mono text-gray-300">2026-10-03 18:45:12</div>
+                <div className="text-sm font-mono text-gray-300">{allocation ? new Date(allocation.allocatedAt).toLocaleString() : "--"}</div>
               </div>
               <div>
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-1">Session Status</div>
@@ -68,6 +97,7 @@ export default function TicketPage() {
           </div>
         </div>
       </div>
+      {error ? <p role="alert" className="mt-6 text-sm text-red-300">{error}</p> : null}
       
       <Link href="/account" className="mt-12 text-gray-400 hover:text-white transition-colors">
         View in My Account

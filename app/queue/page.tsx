@@ -15,58 +15,75 @@ type QueueState = {
 export default function QueuePage() {
   const [queue, setQueue] = useState<QueueState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canEnterQueue, setCanEnterQueue] = useState(false);
+  const [isEnteringQueue, setIsEnteringQueue] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadQueue() {
+    async function recoverQueue() {
       try {
-        const joinResponse = await fetch("/api/queue/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dropId: "fairdrop-demo" }),
-        });
-        const joinResult = await joinResponse.json();
-
-        if (!joinResponse.ok) {
+        const response = await fetch("/api/session", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) {
           if (!cancelled) {
             setError(
-              joinResponse.status === 401
+              response.status === 401
                 ? "Sign in to enter the queue."
-                : joinResponse.status === 429
+                : response.status === 429
                   ? "Too many requests. Please try again in a few seconds."
-                  : joinResponse.status === 403
+                  : response.status === 403
                     ? "Access is temporarily restricted. Please try again later."
-                : joinResult.error === "NOT_A_PARTICIPANT"
-                  ? "Join the drop before entering the queue."
-                  : "Queue state is temporarily unavailable."
+                    : "Queue state is temporarily unavailable."
             );
           }
           return;
         }
-
-        const statusResponse = await fetch("/api/queue/status?dropId=fairdrop-demo", {
-          headers: { Authorization: `Bearer ${joinResult.token}` },
-          cache: "no-store",
-        });
-        const statusResult = await statusResponse.json();
-
-        if (!statusResponse.ok || !statusResult.queued) {
-          if (!cancelled) setError("Queue state is temporarily unavailable.");
+        if (cancelled) return;
+        if (result.state.queue) {
+          setQueue({ ...result.state.queue, totalQueued: 0 });
           return;
         }
-
-        if (!cancelled) setQueue(statusResult.queue);
+        setCanEnterQueue(Boolean(result.state.participation));
+        setError(
+          result.state.participation
+            ? "You have joined the drop. Enter the queue when you are ready."
+            : "Join the drop before entering the queue."
+        );
       } catch {
         if (!cancelled) setError("Queue state is temporarily unavailable.");
       }
     }
 
-    void loadQueue();
+    void recoverQueue();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  async function enterQueue() {
+    if (isEnteringQueue) return;
+    setIsEnteringQueue(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/queue/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dropId: "fairdrop-demo" }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(response.status === 429 ? "Too many requests. Please try again shortly." : "Unable to enter the queue.");
+        return;
+      }
+      setQueue({ ...result.queue, totalQueued: result.queue.totalQueued });
+      setCanEnterQueue(false);
+    } catch {
+      setError("Unable to enter the queue.");
+    } finally {
+      setIsEnteringQueue(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 w-full">
@@ -125,6 +142,16 @@ export default function QueuePage() {
         </div>
 
         {error ? <p role="alert" className="mt-6 text-sm text-red-300 z-10">{error}</p> : null}
+        {canEnterQueue ? (
+          <button
+            type="button"
+            onClick={enterQueue}
+            disabled={isEnteringQueue}
+            className="mt-6 z-10 rounded-lg bg-white px-5 py-3 text-sm font-bold text-black disabled:opacity-60"
+          >
+            {isEnteringQueue ? "ENTERING QUEUE..." : "ENTER QUEUE"}
+          </button>
+        ) : null}
       </div>
     </div>
   );

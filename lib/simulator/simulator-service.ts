@@ -30,7 +30,7 @@ function denied(decision: { classification: string }) { return decision.classifi
 
 async function ensureSimulationDrop(dropId: string) {
   const now = new Date();
-  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity: 500, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, new: true });
+  await Drop.findOneAndUpdate({ dropId }, { $setOnInsert: { dropId, name: "Isolated FairDrop Simulator Drop", capacity: 500, status: "ACTIVE", startsAt: now, endsAt: null } }, { upsert: true, returnDocument: "after" });
 }
 
 export async function cleanupSimulation(dropId: string, users: VirtualUser[], states: Map<number, UserState>) {

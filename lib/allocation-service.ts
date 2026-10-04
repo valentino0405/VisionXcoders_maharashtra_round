@@ -112,7 +112,7 @@ async function persistAllocation(allocation: AllocationState): Promise<{ allocat
     const result = await Allocation.findOneAndUpdate(
       filter,
       { $setOnInsert: { ...allocation, allocatedAt: new Date(allocation.allocatedAt) } },
-      { includeResultMetadata: true, new: true, runValidators: true, setDefaultsOnInsert: true, upsert: true }
+      { includeResultMetadata: true, returnDocument: "after", runValidators: true, setDefaultsOnInsert: true, upsert: true }
     );
     if (!result.value) throw new Error("Allocation upsert returned no document");
     return { allocation: toAllocationState(result.value), created: result.lastErrorObject?.updatedExisting === false };

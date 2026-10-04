@@ -10,6 +10,8 @@ Each production-style run creates a unique temporary `fairdrop-sim-{run}` drop w
 
 `virtualUsers` supports 1–50,000. Development safety limits are: 500 workers, 300 seconds, 2,000 requests/sec, burst size 100, and jitter up to 10 seconds. Invalid requests are rejected with `SIMULATION_LIMIT_EXCEEDED`; simulations are always finite. The default admin form starts at 100 users rather than a destructive maximum.
 
+The MongoDB driver pool defaults to a maximum of 500 connections so a bounded 500-worker simulation is not held behind the driver's default 100-connection wait queue. It opens connections only as demand requires. Set `FAIRDROP_MONGODB_MAX_POOL_SIZE` to an integer from 1 to 500 when an environment has a lower Atlas connection budget.
+
 A seed deterministically assigns virtual-user profiles and jitter decisions. Reproducibility applies to the simulator schedule and profile assignment; real Redis/Mongo latency and Phase 4 timing can still vary.
 
 ## Scenarios

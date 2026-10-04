@@ -19,22 +19,47 @@ const maxConcurrency = numberOption("concurrency", Math.min(100, virtualUsers));
 const requestRate = numberOption("rate", 250);
 const scenario = (process.argv.find((argument) => argument.startsWith("--scenario="))?.slice(11) ?? "NORMAL_TRAFFIC") as import("@/lib/simulator/simulator-types.ts").SimulationScenario;
 const seed = numberOption("seed", 12345);
+const progressEverySeconds = numberOption("progress", 10);
 
-const [{ default: connectToDatabase }, { runFairDropSimulation }] = await Promise.all([
+console.log(`Connecting for ${virtualUsers.toLocaleString()} virtual users…`);
+
+const [{ default: connectToDatabase }, { runFairDropSimulation }, mongooseModule] = await Promise.all([
   import("@/lib/mongodb.ts"),
   import("@/lib/simulator/simulator-service.ts"),
+  import("mongoose"),
 ]);
 
 await connectToDatabase();
+console.log("Connected. Starting isolated real-service simulator run…");
 
 const simulationRunId = `sim_live_${new Date().toISOString().replace(/[-:.TZ]/g, "")}_${randomUUID().slice(0, 8)}`;
 const dropId = `fairdrop-sim-live-${randomUUID().replaceAll("-", "")}`;
-const result = await runFairDropSimulation(
-  simulationRunId,
-  dropId,
-  { virtualUsers, durationSeconds, maxConcurrency, requestRate, scenario, seed },
-  { cancelled: false }
-);
+let result: Awaited<ReturnType<typeof runFairDropSimulation>>;
+try {
+  result = await runFairDropSimulation(
+    simulationRunId,
+    dropId,
+    { virtualUsers, durationSeconds, maxConcurrency, requestRate, scenario, seed },
+    { cancelled: false },
+    (() => {
+      let lastLoggedAt = 0;
+      return (metrics) => {
+        const now = Date.now();
+        if (now - lastLoggedAt < progressEverySeconds * 1_000) return;
+        lastLoggedAt = now;
+        console.log(JSON.stringify({
+          progress: `${metrics.completedVirtualUsers}/${metrics.totalVirtualUsers}`,
+          requests: metrics.totalRequests,
+          actualRequestsPerSecond: Number(metrics.requestsPerSecond.toFixed(1)),
+          peakInFlight: metrics.execution.peakInFlightRequests,
+          timedOut: metrics.execution.timedOutVirtualUsers,
+        }));
+      };
+    })()
+  );
+} finally {
+  await mongooseModule.default.disconnect();
+}
 
 assert.equal(result.metrics.integrity.duplicateSeatAssignments, 0);
 assert.equal(result.metrics.integrity.duplicateParticipantAllocations, 0);
@@ -58,6 +83,16 @@ console.log(JSON.stringify({
     peakInFlight: result.metrics.execution.peakInFlightRequests,
   },
   latency: result.metrics.latency,
+  actionLatency: Object.fromEntries(
+    Object.entries(result.metrics.execution.actionLatency).map(([action, timing]) => [
+      action,
+      {
+        count: timing.count,
+        averageMs: timing.count ? timing.totalMs / timing.count : 0,
+        maxMs: timing.maxMs,
+      },
+    ])
+  ),
   responses: result.metrics.responses,
   serviceTiming: result.metrics.execution.serviceTiming,
   integrity: result.metrics.integrity,

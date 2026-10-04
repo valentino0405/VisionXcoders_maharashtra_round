@@ -51,10 +51,10 @@ export default function DropJoinButton() {
         type="button"
         onClick={joinDrop}
         disabled={isJoining}
-        className="w-full flex items-center justify-center gap-3 h-16 rounded-xl bg-white text-black font-bold text-xl hover:bg-gray-200 transition-all glow-border disabled:cursor-wait disabled:opacity-70"
+        className="group flex h-[3.75rem] w-full items-center justify-center gap-3 rounded-2xl border border-cyan-100/25 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 text-base font-bold text-white shadow-[0_0_28px_rgba(37,99,235,0.38)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_38px_rgba(34,211,238,0.42)] active:translate-y-0 disabled:cursor-wait disabled:opacity-70 sm:text-lg"
       >
         {isJoining ? "JOINING..." : "JOIN THE DROP"}
-        <ArrowRight className="h-6 w-6" />
+        <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
       </button>
       {error ? (
         <p role="alert" className="mt-3 text-center text-sm text-red-300">

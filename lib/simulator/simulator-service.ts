@@ -120,7 +120,7 @@ async function action(user: VirtualUser, requested: SimulationAction, dropId: st
   }
 }
 
-async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean } }) {
+async function execute(run: { simulationRunId: string; dropId: string; config: SimulationConfig; control: { cancelled: boolean }; retainResources?: boolean }) {
   try {
     if (run.control.cancelled) {
       await updateSimulationRun(run.simulationRunId, { status: "CANCELLED", completedAt: new Date() });
@@ -129,7 +129,7 @@ async function execute(run: { simulationRunId: string; dropId: string; config: S
     await updateSimulationRun(run.simulationRunId, { status: "RUNNING", startedAt: new Date() });
     const result = await runFairDropSimulation(run.simulationRunId, run.dropId, run.config, run.control, async (metrics) => {
       await updateSimulationRun(run.simulationRunId, { status: run.control.cancelled ? "STOPPING" : "RUNNING", metrics });
-    });
+    }, run.retainResources);
     await completeSimulationRun(result);
   } catch (error) {
     await updateSimulationRun(run.simulationRunId, { status: "FAILED", completedAt: new Date(), errorSummary: error instanceof Error ? error.message.slice(0, 500) : "Unexpected simulator failure" });
@@ -144,7 +144,8 @@ export async function runFairDropSimulation(
   dropId: string,
   config: SimulationConfig,
   control: { cancelled: boolean },
-  onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void
+  onProgress?: (metrics: import("./simulator-types.ts").SimulationMetrics) => Promise<void> | void,
+  retainResources = false
 ) {
   const users = new Map<number, VirtualUser>();
   const states = new Map<number, UserState>();
@@ -157,21 +158,31 @@ export async function runFairDropSimulation(
       onProgress,
     });
   } finally {
-    await cleanupSimulation(dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
+    if (!retainResources) await cleanupSimulation(dropId, [...users.values()], states).catch(() => console.error("Simulator cleanup failed"));
   }
 }
 
 export async function startSimulation(config: SimulationConfig) {
+  return startSimulationInternal(config);
+}
+
+async function startSimulationInternal(config: SimulationConfig, ownerClerkId?: string, retainResources = false) {
   const resolved = validateSimulationConfig(config);
   await connectToDatabase();
   const simulationRunId = runId();
   const dropId = simulationDropId(simulationRunId);
   const control = { cancelled: false };
   activeRuns.set(simulationRunId, control);
-  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved) });
+  await createSimulationRun({ simulationRunId, dropId, scenario: resolved.scenario, configuration: resolved, metrics: emptySimulationMetrics(resolved.virtualUsers, resolved), ownerClerkId: ownerClerkId ?? null });
   await updateSimulationRun(simulationRunId, { status: "STARTING" });
-  void execute({ simulationRunId, dropId, config: resolved, control });
+  void execute({ simulationRunId, dropId, config: resolved, control, retainResources });
   return { simulationRunId, dropId, status: "STARTING" as SimulationRunStatus };
+}
+
+/** Restricted live-demo entry point. It shares the exact simulator and FairDrop services,
+ * while retaining its isolated drop long enough for the authenticated judge to inspect it. */
+export async function startLiveDemoSimulation(config: SimulationConfig, ownerClerkId: string) {
+  return startSimulationInternal(config, ownerClerkId, true);
 }
 export async function stopSimulation(simulationRunId: string) {
   const control = activeRuns.get(simulationRunId);
